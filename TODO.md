@@ -65,6 +65,12 @@ See docs/mvp-development-plan.md. The UI/form stack reuses verified Radix Dialog
       Depends on: T007.
       Verify: Aggregate checks, browser branding, container safety, and workflow review.
 
+- [x] T009 [P1] Add a verified VPS image update helper
+      Goal: Build or select immutable images after source updates, preserve and back up SQLite, and record only verified successful updates.
+      Modules: scripts/update-vps.*, tests/test_update_vps.py, docs/, and check workflow.
+      Depends on: T008.
+      Verify: Linux lock/failure regression tests, aggregate checks, Compose configuration, and container/browser smoke checks. No live VPS deployment.
+
 ## Acceptance Criteria
 
 All implemented features are described accurately; checks distinguish pass/fail/not run; no push, publication, deployment, or secrets in source.

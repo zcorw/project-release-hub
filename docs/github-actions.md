@@ -78,3 +78,7 @@ Compose does not inject runtime GitHub/MCP credentials. Remote ChatGPT connectiv
 ## Delivery boundary
 
 The later user instruction authorizes committing and pushing the source to https://github.com/zcorw/project-release-hub. The existing repository was verified empty and public before the first push. The local commit workflow uses a feature branch rather than writing directly to main. Source pushes trigger Checks automatically. This authorization does not set Actions variables/secrets, change visibility, manually dispatch publication, log into GHCR, publish an image, or deploy to a server.
+
+## Manual VPS update tooling
+
+The later request adds a manually invoked updater in scripts/update-vps.sh. It uses local builds by default, keeps the existing loopback-only Compose/SQLite boundary, and records verified immutable image IDs. It does not connect to or deploy a server during implementation. See [the operator guide](vps-update.md). The current public repository still does not satisfy the private-image publication gate. Ubuntu Checks also runs the isolated Python updater regression suite.

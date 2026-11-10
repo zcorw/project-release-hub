@@ -23,6 +23,8 @@ jobs:
           node-version: 22.23.4
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Check the isolated VPS updater
+        run: python3 -m unittest discover -s tests -p 'test_update_vps.py' -v
       - run: npm run check
       - name: Install the isolated CI browser
         run: npx playwright install --with-deps chromium

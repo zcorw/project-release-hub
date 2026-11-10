@@ -5,3 +5,6 @@ data
 playwright-report
 test-results
 package-lock.json
+
+.deploy/
+__pycache__/

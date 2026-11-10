@@ -13,3 +13,8 @@ test-results/
 *.db-wal
 .DS_Store
 Thumbs.db
+
+# Private VPS update state and Python test caches.
+.deploy/
+__pycache__/
+*.pyc

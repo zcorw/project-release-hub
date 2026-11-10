@@ -67,6 +67,12 @@ The repository now includes automatic checks and a separate manually triggered p
 
 The user subsequently authorized committing and pushing the source to [zcorw/project-release-hub](https://github.com/zcorw/project-release-hub). This repository is public: checks can run, but the private-image publication workflow deliberately refuses publication from it. Repository visibility, Actions variables, and secrets are not changed. See [workflow setup and local Docker guide](docs/github-actions.md) for the gates and storage precautions.
 
+## VPS image update helper
+
+After updating a clean, committed checkout on an independently prepared Linux VPS, run `bash scripts/update-vps.sh`. It builds locally by default, backs up the existing SQLite database, updates the exact image ID, and records the latest verified image in `.deploy/latest-image.json` only after health succeeds. Use `bash scripts/update-vps.sh --status` to inspect actual versus saved state.
+
+This is operator tooling, not a live deployment or permission to expose the MVP publicly. Keep loopback-only access. See the [VPS update and recovery guide](docs/vps-update.md) for prerequisites, immutable digest pulls, failures, backups, and explicit image-only rollback.
+
 ## MCP and ChatGPT
 
 The implemented endpoint is http://127.0.0.1:4310/mcp with an Authorization: Bearer token header. It exposes read tools, idempotent batch submission, and request-status lookup. It intentionally exposes no approval tool.
@@ -130,3 +136,4 @@ To reset a forgotten password, stop the server, set HUB_RESET_PASSWORD to the ne
 - [Verification](docs/verification.md)
 - [GitHub Actions and local container](docs/github-actions.md)
 - [Naming and workflow plan](docs/naming-and-ci-plan.md)
+- [VPS image updates](docs/vps-update.md)
