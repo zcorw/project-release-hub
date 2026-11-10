@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>知序 · 静态预览</title
+  ><style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: #f6f7fb;
+      color: #182238;
+      font: 15px system-ui;
+    }
+    aside {
+      position: fixed;
+      width: 230px;
+      height: 100vh;
+      background: #fff;
+      border-right: 1px solid #e6e9f0;
+      padding: 30px 22px;
+    }
+    b.logo {
+      font-size: 19px;
+      display: block;
+      margin-bottom: 42px;
+    }
+    nav p {
+      padding: 13px;
+      border-radius: 10px;
+    }
+    nav p:first-child {
+      background: #ecebff;
+      color: #5449ca;
+    }
+    main {
+      margin-left: 230px;
+      padding: 42px;
+      max-width: 1600px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    small {
+      color: #727c91;
+    }
+    h1 {
+      font-size: 30px;
+      margin: 8px 0;
+    }
+    button {
+      border: 0;
+      border-radius: 9px;
+      background: #6658db;
+      color: white;
+      padding: 12px 18px;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+      margin: 30px 0;
+    }
+    .card,
+    article {
+      background: white;
+      border: 1px solid #e6e9f0;
+      border-radius: 15px;
+      padding: 24px;
+    }
+    .card strong {
+      font-size: 28px;
+      display: block;
+      margin: 10px 0;
+    }
+    .projects {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+    article h2 {
+      font-size: 20px;
+    }
+    article p {
+      color: #727c91;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .tag {
+      color: #368461;
+      background: #e8f6ef;
+      padding: 6px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+    }
+    .bar {
+      height: 7px;
+      background: #edeff6;
+      border-radius: 6px;
+      margin: 18px 0;
+    }
+    .bar span {
+      display: block;
+      height: 100%;
+      width: 60%;
+      background: #7362da;
+      border-radius: 6px;
+    }
+    .note {
+      padding: 13px 18px;
+      background: #fff5dc;
+      border-radius: 9px;
+      color: #83651b;
+      margin-bottom: 28px;
+    }
+    footer {
+      border-top: 1px solid #eceef5;
+      padding-top: 18px;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      margin-top: 20px;
+    }
+    @media (max-width: 800px) {
+      aside {
+        display: none;
+      }
+      main {
+        margin: 0;
+        padding: 24px;
+      }
+      .metrics,
+      .projects {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+  <aside>
+    <b class="logo">◈ 知序</b><small>项目工作台</small>
+    <nav>
+      <p>▦　项目总览</p>
+      <p>✓　待确认变更</p>
+      <p>↶　操作历史</p>
+    </nav>
+  </aside>
+  <main>
+    <div class="note">静态设计预览 · 下方为示例数据，不是已经导入的真实项目。</div>
+    <header>
+      <div>
+        <small>YOUR PROJECTS, IN ONE PLACE</small>
+        <h1>项目总览</h1>
+        <p>从具体功能到版本发布，每一步都清晰可见。</p>
+      </div>
+      <button>＋ 新建项目</button>
+    </header>
+    <section class="metrics">
+      <div class="card"><small>进行中的项目</small><strong>2</strong>聚焦当前工作</div>
+      <div class="card"><small>已完成功能</small><strong>12 / 20</strong>记录开发进度</div>
+      <div class="card"><small>待处理问题</small><strong>3</strong>及时解除阻塞</div>
+      <div class="card"><small>待确认变更</small><strong>1</strong>由你决定是否应用</div>
+    </section>
+    <h2>所有项目</h2>
+    <div class="projects">
+      <article>
+        <div class="row">
+          <h2>内容工作台</h2>
+          <span class="tag">运行正常</span>
+        </div>
+        <p>从写作、整理到发布的个人工作空间</p>
+        <div class="row"><strong>功能进度</strong><small>6 / 10 已完成</small></div>
+        <div class="bar"><span></span></div>
+        <small>2 规划中　·　2 开发中　·　6 已完成</small>
+        <footer><span>正式环境 · v0.2.0</span><span>查看项目 →</span></footer>
+      </article>
+      <article>
+        <div class="row">
+          <h2>知序</h2>
+          <span class="tag">开发中</span>
+        </div>
+        <p>统一管理功能、计划与发布状态</p>
+        <div class="row"><strong>功能进度</strong><small>6 / 10 已完成</small></div>
+        <div class="bar"><span></span></div>
+        <small>具体功能　·　开发任务　·　问题与版本</small>
+        <footer><span>本地环境 · 未发布</span><span>查看项目 →</span></footer>
+      </article>
+    </div>
+  </main>
+</html>

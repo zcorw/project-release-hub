@@ -1,0 +1,35 @@
+name: Checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    name: Format, typecheck, SQLite tests, browser, and container
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.4
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
+      - name: Install the isolated CI browser
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Validate local-only container configuration
+        run: docker compose config --quiet
+      - name: Build application image without publishing
+        run: docker build --tag zhixu:ci .
+      - name: Check container health, security, and persistence
+        run: npm run test:container -- zhixu:ci

@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+coverage/
+data/
+playwright-report/
+test-results/
+*.log
+*.db
+*.db-shm
+*.db-wal
+.DS_Store
+Thumbs.db

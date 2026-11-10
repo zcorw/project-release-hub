@@ -1,0 +1,19 @@
+name: zhixu
+services:
+  app:
+    image: zhixu:local
+    build: .
+    init: true
+    ports:
+      - '127.0.0.1:4310:4310'
+    volumes:
+      - zhixu-data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  zhixu-data:
