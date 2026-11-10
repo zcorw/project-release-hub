@@ -1278,3 +1278,40 @@ textarea {
     font-size: 10px;
   }
 }
+/* Account controls share existing accessible dialog and field styles. */
+.account-settings {
+  display: grid;
+  gap: 20px;
+}
+.account-section {
+  border-top: 1px solid var(--border, #e4e8ed);
+  padding-top: 16px;
+}
+.account-section h3 {
+  margin-top: 0;
+}
+.account-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+.account-record {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border, #e4e8ed);
+}
+.account-record p {
+  margin: 4px 0;
+  font-size: 13px;
+}
+.account-record > div,
+.account-url {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}

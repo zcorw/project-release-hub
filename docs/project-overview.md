@@ -26,6 +26,10 @@ React/TypeScript, Node/TypeScript, simple single-user login, basic tests, and lo
 
 ## Non-goals
 
-Remote deployment, GitHub writes or workflow triggers from inside the application, repository analysis AI, multi-user accounts, and production remote MCP authentication are not part of this version.
+Remote deployment, GitHub writes or workflow triggers from inside the application, repository analysis AI, and multi-user accounts are not part of this version. Later authorized account/OAuth work adds optional HTTPS authentication; see account-oauth.md for behavior and live verification limits.
 
 See mvp-development-plan.md, stage records, project-conventions.md, and TODO.md for decisions and verification.
+
+## Account and OAuth follow-up
+
+The user requested native account completion and MCP OAuth without nest-account, then authorized source push after completion. Existing owner/data/passwords are preserved. Persistent sessions, password changes, security controls and optional HTTPS OAuth are implemented. A real ChatGPT connection and deployment are not provisioned.

@@ -1,6 +1,6 @@
 # Architecture
 
-Status: local MVP design, 2026-11-10.
+Status: single-owner application with optional HTTPS/OAuth, 2026-11-10.
 
 - React + TypeScript + Vite client with Radix Dialog, React Hook Form and Zod.
 - Express + TypeScript HTTP server and the official MCP SDK.
@@ -11,9 +11,9 @@ Status: local MVP design, 2026-11-10.
 
 shared/ contains entity contracts. server/domain/ owns entity invariants. server/application/ owns workflows. server/infrastructure/ owns persistence. server/http/ and server/mcp/ are transport adapters. web/ owns presentation.
 
-## Local security
+## Account and transport security
 
-The server binds to loopback. First-run setup creates one hashed-password account. Authenticated web sessions receive a CSRF token for writes. MCP uses a separately configured token and has no approval tool. Public HTTPS, OAuth, multi-user access, and production hardening are separate future work.
+Loopback remains the default. Local setup creates one owner; remote setup is disabled. SQLite sessions have idle/absolute expiry and account-version revocation. Browser writes require CSRF. Optional HTTPS mode requires a canonical origin, stable session secret, explicit proxy trust and Secure cookies. server/oauth owns discovery, consent, PKCE, scoped resource-bound credentials and revocation. Local MCP may use a static token; remote MCP uses OAuth. Neither grants web approval privileges. Multi-user isolation and live deployment verification are not implemented. See account-oauth.md.
 
 ## State distinctions
 

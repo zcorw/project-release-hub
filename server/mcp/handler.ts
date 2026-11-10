@@ -6,6 +6,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { batchSchema, kinds } from '../../shared/schema';
 import { HubService } from '../application/hub';
 import { AppError } from '../domain/errors';
+import type { OAuthService } from '../oauth/service';
 function result(value: Record<string, unknown>) {
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(value) }],
@@ -29,7 +30,18 @@ function safeCall(work: () => Record<string, unknown>) {
     return { ...result({ error: detail }), isError: true };
   }
 }
-export function createMcpServer(hub: HubService): McpServer {
+export function createMcpServer(
+  hub: HubService,
+  scopes = ['hub:read', 'hub:create', 'hub:propose'],
+): McpServer {
+  const requireScope = (scope: string) => {
+    if (!scopes.includes(scope))
+      throw new AppError(
+        'INSUFFICIENT_SCOPE',
+        'This OAuth grant does not allow this operation.',
+        403,
+      );
+  };
   const server = new McpServer(
     { name: 'project-release-hub', version: '0.1.0' },
     { maxToolInputElements: 10000 },
@@ -54,6 +66,7 @@ export function createMcpServer(hub: HubService): McpServer {
     },
     ({ kind, projectId, offset, limit }) =>
       safeCall(() => {
+        requireScope('hub:read');
         const all = hub.repository
           .list()
           .filter(
@@ -73,7 +86,7 @@ export function createMcpServer(hub: HubService): McpServer {
     'hub_submit_batch',
     {
       description:
-        'Submit 1-20 atomic operations using a stable UUID requestId. Reuse the exact input and requestId after an uncertain result. Creates save immediately unless a possible duplicate project needs clarification. Updates/deletes always remain pending until a human approves the exact proposal in the local web UI. Never claim a pending operation was applied. Never approve changes on behalf of the human. For updates, read the current revision first and send all entity fields. Optional explicit create IDs support related records in the same batch.',
+        'Submit 1-20 atomic operations using a stable UUID requestId. Reuse the exact input and requestId after an uncertain result. Creates save immediately unless a possible duplicate project needs clarification. Updates/deletes always remain pending until a human approves the exact proposal in the authenticated web UI. Never claim a pending operation was applied. Never approve changes on behalf of the human. For updates, read the current revision first and send all entity fields. Optional explicit create IDs support related records in the same batch.',
       inputSchema: batchSchema,
       annotations: {
         readOnlyHint: false,
@@ -82,7 +95,12 @@ export function createMcpServer(hub: HubService): McpServer {
         openWorldHint: false,
       },
     },
-    (input) => safeCall(() => ({ request: hub.submit(input, 'mcp') })),
+    (input) =>
+      safeCall(() => {
+        for (const operation of input.operations)
+          requireScope(operation.action === 'create' ? 'hub:create' : 'hub:propose');
+        return { request: hub.submit(input, 'mcp') };
+      }),
   );
   server.registerTool(
     'hub_get_request',
@@ -97,7 +115,11 @@ export function createMcpServer(hub: HubService): McpServer {
         openWorldHint: false,
       },
     },
-    ({ requestId }) => safeCall(() => ({ request: hub.request(requestId) })),
+    ({ requestId }) =>
+      safeCall(() => {
+        requireScope('hub:read');
+        return { request: hub.request(requestId) };
+      }),
   );
   server.registerTool(
     'hub_list_pending',
@@ -117,6 +139,7 @@ export function createMcpServer(hub: HubService): McpServer {
     },
     ({ offset, limit }) =>
       safeCall(() => {
+        requireScope('hub:read');
         const pending = hub.repository.requests().filter((r) => r.status === 'pending');
         return {
           requests: pending.slice(offset, offset + limit),
@@ -127,20 +150,43 @@ export function createMcpServer(hub: HubService): McpServer {
   );
   return server;
 }
-export function createMcpHandler(hub: HubService, token?: string): RequestHandler {
+export function createMcpHandler(
+  hub: HubService,
+  token?: string,
+  oauth?: OAuthService,
+): RequestHandler {
   if (token && token.length < 32)
     throw new Error('HUB_MCP_TOKEN must contain at least 32 characters.');
   return async (req, res, next) => {
-    if (!token) {
+    if (!token && !oauth) {
       next(new AppError('MCP_DISABLED', 'MCP 未启用；请在本地设置 HUB_MCP_TOKEN', 503));
       return;
     }
     const provided = req.get('Authorization')?.match(/^Bearer (.+)$/i)?.[1] ?? '';
-    if (
-      Buffer.byteLength(provided) !== Buffer.byteLength(token) ||
-      !timingSafeEqual(Buffer.from(provided), Buffer.from(token))
-    ) {
+    let scopes = ['hub:read', 'hub:create', 'hub:propose'];
+    let authorized = false;
+    if (oauth) {
+      try {
+        scopes = oauth.verifyAccessToken(provided).scopes;
+        authorized = true;
+      } catch {
+        authorized = false;
+      }
+    } else if (token)
+      authorized =
+        Buffer.byteLength(provided) === Buffer.byteLength(token) &&
+        timingSafeEqual(Buffer.from(provided), Buffer.from(token));
+    if (!authorized) {
+      if (oauth)
+        res.set(
+          'WWW-Authenticate',
+          'Bearer realm="zhixu", resource_metadata="' +
+            oauth.issuer +
+            '/.well-known/oauth-protected-resource/mcp", scope="hub:read hub:create hub:propose"' +
+            (provided ? ', error="invalid_token"' : ''),
+        );
       res
+        .set('Cache-Control', 'no-store')
         .status(401)
         .json({ error: { code: 'UNAUTHORIZED', message: 'MCP bearer token required.' } });
       return;
@@ -156,7 +202,7 @@ export function createMcpHandler(hub: HubService, token?: string): RequestHandle
         });
       return;
     }
-    const server = createMcpServer(hub),
+    const server = createMcpServer(hub, scopes),
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,

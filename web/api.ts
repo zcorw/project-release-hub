@@ -1,4 +1,4 @@
-import type { AuthStatus } from './types';
+import type { AccountSecurity, AuthStatus } from './types';
 import type { ActionsSnapshot, ChangeRequest, Operation, Snapshot } from '../shared/schema';
 
 export class ApiError extends Error {
@@ -55,6 +55,30 @@ export const api = {
     return value;
   },
   logout: () => request<void>('/api/auth/logout', {}),
+  security: () => request<AccountSecurity>('/api/account/security'),
+  async changePassword(currentPassword: string, newPassword: string): Promise<AuthStatus> {
+    const value = await request<AuthStatus>('/api/account/password', {
+      currentPassword,
+      newPassword,
+    });
+    csrfToken = value.csrfToken;
+    return value;
+  },
+  async logoutAll(): Promise<AuthStatus> {
+    const value = await request<AuthStatus>('/api/account/logout-all', {});
+    csrfToken = value.csrfToken;
+    return value;
+  },
+  async revokeSession(id: string): Promise<AuthStatus> {
+    const value = await request<AuthStatus>(
+      `/api/account/sessions/${encodeURIComponent(id)}/revoke`,
+      {},
+    );
+    csrfToken = value.csrfToken;
+    return value;
+  },
+  revokeGrant: (id: string) =>
+    request<void>(`/api/account/grants/${encodeURIComponent(id)}/revoke`, {}),
   snapshot: () => request<Snapshot>('/api/snapshot'),
   change: (requestId: string, operations: Operation[]) =>
     request<ChangeRequest>('/api/changes', { requestId, operations }),

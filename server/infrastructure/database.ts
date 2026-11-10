@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import type {
   Entity,
   EntityData,
@@ -17,6 +18,11 @@ export class Repository {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('busy_timeout = 5000');
+    const schemaVersion = this.db.pragma('user_version', { simple: true }) as number;
+    if (schemaVersion > 2) {
+      this.db.close();
+      throw new Error('Database schema is newer than this application.');
+    }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS entities (
         id TEXT PRIMARY KEY, kind TEXT NOT NULL, project_id TEXT REFERENCES entities(id),
@@ -28,8 +34,21 @@ export class Repository {
       CREATE TABLE IF NOT EXISTS audit (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, data TEXT NOT NULL CHECK(json_valid(data)));
       CREATE TABLE IF NOT EXISTS actions (project_id TEXT PRIMARY KEY REFERENCES entities(id), data TEXT NOT NULL CHECK(json_valid(data)));
       CREATE TABLE IF NOT EXISTS account (id INTEGER PRIMARY KEY CHECK(id=1), salt TEXT NOT NULL, hash TEXT NOT NULL);
-      PRAGMA user_version = 1;
+      CREATE TABLE IF NOT EXISTS web_sessions (
+        id TEXT PRIMARY KEY, data TEXT NOT NULL CHECK(json_valid(data)), created_at INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, authenticated INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS web_sessions_expiry ON web_sessions(expires_at);
+      CREATE TABLE IF NOT EXISTS security_events (
+        id TEXT PRIMARY KEY, event TEXT NOT NULL, created_at TEXT NOT NULL, detail TEXT
+      );
     `);
+    this.transaction(() => {
+      const columns = this.db.prepare('PRAGMA table_info(account)').all() as { name: string }[];
+      if (!columns.some((column) => column.name === 'auth_version'))
+        this.db.exec('ALTER TABLE account ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 1');
+      this.db.pragma('user_version = 2');
+    });
   }
   transaction<T>(work: () => T): T {
     return this.db.transaction(work)();
@@ -135,9 +154,10 @@ export class Repository {
       )
       .run(snapshot.projectId, JSON.stringify(snapshot));
   }
-  account(): { salt: string; hash: string } | undefined {
-    return this.db.prepare('SELECT salt,hash FROM account WHERE id=1').get() as
-      { salt: string; hash: string } | undefined;
+  account(): { salt: string; hash: string; authVersion: number } | undefined {
+    return this.db
+      .prepare('SELECT salt,hash,auth_version AS authVersion FROM account WHERE id=1')
+      .get() as { salt: string; hash: string; authVersion: number } | undefined;
   }
   createAccount(salt: string, hash: string): boolean {
     return (
@@ -146,7 +166,34 @@ export class Repository {
     );
   }
   setPassword(salt: string, hash: string): void {
-    this.db.prepare('UPDATE account SET salt=?,hash=? WHERE id=1').run(salt, hash);
+    this.transaction(() => {
+      this.db
+        .prepare('UPDATE account SET salt=?,hash=?,auth_version=auth_version+1 WHERE id=1')
+        .run(salt, hash);
+      this.db.prepare('DELETE FROM web_sessions').run();
+      this.securityEvent('password_changed');
+    });
+  }
+  invalidateAuthentication(): void {
+    this.db.prepare('UPDATE account SET auth_version=auth_version+1 WHERE id=1').run();
+    this.db.prepare('DELETE FROM web_sessions').run();
+  }
+  securityEvent(event: string, detail?: string): void {
+    this.db
+      .prepare('INSERT INTO security_events(id,event,created_at,detail) VALUES(?,?,?,?)')
+      .run(randomUUID(), event, new Date().toISOString(), detail ?? null);
+    this.db
+      .prepare(
+        'DELETE FROM security_events WHERE id NOT IN (SELECT id FROM security_events ORDER BY rowid DESC LIMIT 1000)',
+      )
+      .run();
+  }
+  securityEvents() {
+    return this.db
+      .prepare(
+        'SELECT id,event,created_at AS createdAt,detail FROM security_events ORDER BY rowid DESC LIMIT 100',
+      )
+      .all() as { id: string; event: string; createdAt: string; detail?: string }[];
   }
   close(): void {
     this.db.close();

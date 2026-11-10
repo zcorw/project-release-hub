@@ -71,3 +71,13 @@ Review: PASS after fixing absent-container/persisted-volume backup bypass, prese
 Validation on 2026-11-10: 21 updater regressions passed in a networkless Python 3.12 Linux container with the repository mounted read-only, including actual flock contention. The Windows Python run passed 20 tests and skipped the Linux-only lock test. Bash syntax, CLI help, ignored-state checks, Compose configuration, npm run check (formatting, TypeScript, 45 application tests, production build), the existing disposable Linux container smoke test, and the complete isolated Chrome workflow passed. Container smoke used the previously built zhixu:ci image because application/runtime image inputs were unchanged by this task. No live VPS upgrade, registry publication/pull integration, or full real-Docker updater replacement is claimed; updater command/failure coverage uses a fake Docker adapter. Hosted CI for the eventual source commit must be checked separately.
 
 The user subsequently authorized committing and pushing this script work to the existing source remote. Only this task's source/tests/docs/configuration are included; parallel account/OAuth changes remain separate. No deployment or image publication is included.
+
+## Step 10: Native accounts and MCP OAuth
+
+Scope: additive SQLite account/session migration, account security UI, canonical HTTPS/proxy/Origin handling, OAuth provider, MCP scope enforcement, isolated tests, and operator docs. The user chose not to use nest-account and explicitly authorized source push after completion.
+
+Result: existing single-owner password/data retained; persistent bounded sessions, password change and revocation, protected remote initialization, explicit consent, S256 PKCE, resource-bound hashed credentials, refresh rotation/replay revocation, grants/security audit, and read/create/propose scopes. MCP still cannot approve its own updates/deletes. Reconsent replaces prior client authority rather than leaving hidden broad tokens active.
+
+Validation: npm run check passed with 97 tests, six Chrome scenarios passed including real OAuth callback and account-security flows, and a freshly built disposable Linux container passed smoke checks. Independent source review's confirmed scope-display issue was fixed and reproduced as resolved. Browser verification fixed same-origin form Origin/referrer and cross-origin callback CSP handling. See verification.md for the local Node smoke-harness workaround and unrun live checks.
+
+No real account/data migration, domain/proxy/firewall change, ChatGPT connection, or deployment was performed. The existing VPS updater remains loopback-only and rejects remote overrides. New source is intended for an authorized normal push, without force or automatic merge/deployment.

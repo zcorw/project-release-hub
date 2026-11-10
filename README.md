@@ -9,7 +9,8 @@ A local-first web workspace for personal software projects, concrete feature pla
 - Chinese responsive dashboard with cross-project feature progress and one environment per project.
 - Manual create, edit, and recoverable delete for projects, features, tasks, issues, and releases.
 - Feature acceptance criteria, planned dates, priorities, and target releases; tasks/issues can link to a feature.
-- Single-user password setup and login, hashed passwords, session rotation, and CSRF-protected web writes.
+- Single-owner accounts with persistent sessions, password changes, session/grant revocation, and CSRF-protected web writes.
+- Optional HTTPS/OAuth mode with explicit consent, S256 PKCE, scoped tokens, rotation, and revocation.
 - Atomic batches, stable request IDs, optimistic revisions, duplicate-project review, and human confirmation.
 - Audit snapshots and conflict-aware undo. Undo never silently overwrites a newer record or leaves dangling references.
 - Explicit, read-only GitHub Actions refresh with last-successful cache and clear failure states. CI success never changes release or environment state.
@@ -45,7 +46,7 @@ npm start
 
 Open http://127.0.0.1:4310. Both startup modes bind locally; neither publishes the app.
 
-Data defaults to data/hub.db and is ignored by Git. Stop the app with Ctrl+C. Sessions are kept in memory and expire on server restart. The account and project records persist in SQLite.
+Data defaults to data/hub.db and is ignored by Git. Stop the app with Ctrl+C. Sessions, account and project records persist in SQLite. A stable HUB_SESSION_SECRET preserves browser login across restarts; local mode without one still requires login after restart.
 
 ## Optional configuration
 
@@ -55,7 +56,8 @@ Set variables in the same terminal before starting the server:
 - HUB_DATA_DIR: directory containing hub.db, default ./data.
 - HUB_BIND_HOST: defaults to 127.0.0.1. The Dockerfile alone opts into 0.0.0.0 inside a container whose host port must remain loopback-only.
 - GITHUB_TOKEN: optional GitHub token. Public repositories can work without a token; private repositories require access with read-only Actions permission.
-- HUB_MCP_TOKEN: a separate random token of at least 32 characters. MCP is disabled when absent.
+- HUB_MCP_TOKEN: local-only static token of at least 32 characters.
+- HUB_PUBLIC_URL, HUB_SESSION_SECRET, HUB_TRUST_PROXY: optional HTTPS/OAuth mode; see [account and OAuth guide](docs/account-oauth.md). MCP is disabled unless a local token or remote OAuth is configured.
 
 .env.example is a reference only; the app does not automatically load .env. Never paste tokens into a project description or commit them.
 
@@ -79,7 +81,7 @@ The implemented endpoint is http://127.0.0.1:4310/mcp with an Authorization: Bea
 
 See [MCP guide](docs/mcp.md) for contracts and examples.
 
-**The local endpoint has not been connected to ChatGPT cloud.** ChatGPT cloud cannot reach this computer's loopback address. A real remote connection needs a separately authorized hosted HTTPS endpoint and suitable authentication. This delivery does not deploy, create a ChatGPT plugin, configure OAuth, or expose a port to the internet.
+**No real ChatGPT connection has been provisioned.** ChatGPT cloud cannot reach loopback. Optional HTTPS/OAuth is now implemented for a separately configured endpoint. See [account and OAuth guide](docs/account-oauth.md) for setup, scopes and live verification. This source change does not deploy, configure a real proxy/domain, create a connector, or expose a port.
 
 ## Verification
 
@@ -115,14 +117,14 @@ To reset a forgotten password, stop the server, set HUB_RESET_PASSWORD to the ne
 
 ## Scope and limitations
 
-- Local single-user MVP, not a hardened publicly hosted service.
+- Single-owner application with opt-in HTTPS/OAuth; no independent penetration test or live public deployment is claimed.
 - No repository-analysis AI inside the app. ChatGPT prepares structured data outside it.
 - No GitHub login/token setup, Issues/PR synchronization, auto-refresh, or deployment execution.
 - No remote ChatGPT connection has been provisioned.
 - GitHub adapter tests use fixtures; real private-repository access is not verified.
 - The web audit view shows the latest 100 events. Earlier events remain in SQLite; all pending requests remain discoverable.
 - Undo is refused if newer revisions or reference constraints make it unsafe.
-- No multi-user permissions, password recovery email, automatic backup schedule, or public-service OAuth.
+- No multi-user permissions, password recovery email, or automatic backup schedule.
 - Source commit/push is authorized to zcorw/project-release-hub only. No image publication, deployment, or changes to persistent computer permissions are included.
 
 ## Engineering documents
@@ -133,6 +135,7 @@ To reset a forgotten password, stop the server, set HUB_RESET_PASSWORD to the ne
 - [MVP plan](docs/mvp-development-plan.md)
 - [Development checklist](TODO.md)
 - [MCP guide](docs/mcp.md)
+- [Account and OAuth guide](docs/account-oauth.md)
 - [Verification](docs/verification.md)
 - [GitHub Actions and local container](docs/github-actions.md)
 - [Naming and workflow plan](docs/naming-and-ci-plan.md)
