@@ -11,4 +11,4 @@ if (!repository.account()) {
 const { salt, hash } = hashPassword(password);
 repository.setPassword(salt, hash);
 repository.close();
-console.log('Password reset. Restart the server to revoke existing in-memory sessions.');
+console.log('Password reset. All browser sessions and OAuth credentials have been invalidated.');

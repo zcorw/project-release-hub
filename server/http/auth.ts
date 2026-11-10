@@ -4,6 +4,9 @@ declare module 'express-session' {
   interface SessionData {
     authenticated?: boolean;
     csrfToken?: string;
+    authVersion?: number;
+    createdAt?: number;
+    freshSession?: boolean;
   }
 }
 export function hashPassword(password: string): { salt: string; hash: string } {
@@ -18,10 +21,17 @@ export function verifyPassword(password: string, account: { salt: string; hash: 
 export function csrfToken(request: Request): string {
   return (request.session.csrfToken ??= randomBytes(32).toString('hex'));
 }
-export async function newSession(request: Request, authenticated: boolean): Promise<void> {
+export async function newSession(
+  request: Request,
+  authenticated: boolean,
+  authVersion?: number,
+): Promise<void> {
   await new Promise<void>((resolve, reject) =>
     request.session.regenerate((error) => (error ? reject(error) : resolve())),
   );
   request.session.authenticated = authenticated;
+  request.session.authVersion = authVersion;
+  request.session.createdAt = Date.now();
+  request.session.freshSession = true;
   csrfToken(request);
 }

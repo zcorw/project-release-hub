@@ -16,6 +16,7 @@ import {
   type AuditEvent,
 } from '../shared/schema';
 import { api, errorText } from './api';
+import { AccountSettings, clearOAuthRequest, resumeOAuth } from './account';
 import type { AuthStatus } from './types';
 import { EntityForm, Modal, RecordDetails, Tag, kindNames, label } from './components';
 import './styles.css';
@@ -24,9 +25,11 @@ const emptySnapshot: Snapshot = { entities: [], requests: [], history: [], actio
 const dateTime = (value: string) => new Date(value).toLocaleString('zh-CN');
 function Auth({
   configured,
+  setupAllowed,
   onAuth,
 }: {
   configured: boolean;
+  setupAllowed: boolean;
   onAuth: (status: AuthStatus) => void;
 }) {
   const login = useForm({ resolver: zodResolver(loginSchema), defaultValues: { password: '' } });
@@ -69,58 +72,69 @@ function Auth({
       <main className="auth-main">
         <div className="auth-card">
           <span className="eyebrow">PROJECT WORKSPACE</span>
-          <h2>{configured ? '欢迎回来' : '创建你的工作空间'}</h2>
+          <h2>
+            {configured ? '欢迎回来' : setupAllowed ? '创建你的工作空间' : '等待管理员初始化'}
+          </h2>
           <p className="muted">
             {configured ? '输入密码，继续管理你的项目。' : '设置本地管理员密码，开启项目管理。'}
           </p>
-          <form
-            noValidate
-            onSubmit={configured ? login.handleSubmit(submit) : setup.handleSubmit(submit)}
-          >
-            <div className="field">
-              <label htmlFor="password">密码</label>
-              <input
-                id="password"
-                type="password"
-                autoComplete={configured ? 'current-password' : 'new-password'}
-                {...(configured ? login.register('password') : setup.register('password'))}
-                aria-invalid={!!current.formState.errors.password}
-                aria-describedby="password-error password-hint"
-              />
-              <small id="password-hint">{!configured && '至少 12 个字符，请妥善保存。'}</small>
-              <span className="field-error" id="password-error" role="alert">
-                {current.formState.errors.password?.message}
-              </span>
+          {!configured && !setupAllowed ? (
+            <div className="alert" role="status">
+              此服务尚未初始化管理员账户。为保护远程服务，网页不开放首次设置。请管理员在服务器上完成账户初始化后刷新页面。
+              <button className="secondary" onClick={() => window.location.reload()}>
+                刷新状态
+              </button>
             </div>
-            {!configured && (
+          ) : (
+            <form
+              noValidate
+              onSubmit={configured ? login.handleSubmit(submit) : setup.handleSubmit(submit)}
+            >
               <div className="field">
-                <label htmlFor="confirmPassword">确认密码</label>
+                <label htmlFor="password">密码</label>
                 <input
-                  id="confirmPassword"
+                  id="password"
                   type="password"
-                  autoComplete="new-password"
-                  {...setup.register('confirmPassword')}
-                  aria-invalid={!!setup.formState.errors.confirmPassword}
-                  aria-describedby="confirm-error"
+                  autoComplete={configured ? 'current-password' : 'new-password'}
+                  {...(configured ? login.register('password') : setup.register('password'))}
+                  aria-invalid={!!current.formState.errors.password}
+                  aria-describedby="password-error password-hint"
                 />
-                <span className="field-error" id="confirm-error" role="alert">
-                  {setup.formState.errors.confirmPassword?.message}
+                <small id="password-hint">{!configured && '至少 12 个字符，请妥善保存。'}</small>
+                <span className="field-error" id="password-error" role="alert">
+                  {current.formState.errors.password?.message}
                 </span>
               </div>
-            )}
-            {error && (
-              <div className="alert" role="alert">
-                {error}
-              </div>
-            )}
-            <button className="full-width" disabled={current.formState.isSubmitting}>
-              {current.formState.isSubmitting
-                ? '正在验证…'
-                : configured
-                  ? '进入工作空间'
-                  : '创建工作空间'}
-            </button>
-          </form>
+              {!configured && (
+                <div className="field">
+                  <label htmlFor="confirmPassword">确认密码</label>
+                  <input
+                    id="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    {...setup.register('confirmPassword')}
+                    aria-invalid={!!setup.formState.errors.confirmPassword}
+                    aria-describedby="confirm-error"
+                  />
+                  <span className="field-error" id="confirm-error" role="alert">
+                    {setup.formState.errors.confirmPassword?.message}
+                  </span>
+                </div>
+              )}
+              {error && (
+                <div className="alert" role="alert">
+                  {error}
+                </div>
+              )}
+              <button className="full-width" disabled={current.formState.isSubmitting}>
+                {current.formState.isSubmitting
+                  ? '正在验证…'
+                  : configured
+                    ? '进入工作空间'
+                    : '创建工作空间'}
+              </button>
+            </form>
+          )}
           <p className="auth-note">项目数据保存在本地。此版本不执行部署或触发工作流。</p>
         </div>
       </main>
@@ -142,6 +156,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [accountOpen, setAccountOpen] = useState(false);
   const [page, setPage] = useState<'overview' | 'pending' | 'history'>('overview');
   const [projectId, setProjectId] = useState<string | null>(null);
   const [tab, setTab] = useState<Exclude<Kind, 'project'>>('feature');
@@ -182,6 +197,7 @@ function App() {
     try {
       const status = await api.auth();
       setAuth(status);
+      if (status.authenticated && resumeOAuth()) return;
       if (status.authenticated) setSnapshot(await api.snapshot());
     } catch (err) {
       setError(errorText(err));
@@ -298,8 +314,10 @@ function App() {
     return (
       <Auth
         configured={auth.configured}
+        setupAllowed={auth.setupAllowed}
         onAuth={(status) => {
           setAuth(status);
+          if (resumeOAuth()) return;
           void reload();
         }}
       />
@@ -354,8 +372,11 @@ function App() {
           ))}
         </nav>
         <div className="sidebar-bottom">
+          <button className="text-button" onClick={() => setAccountOpen(true)}>
+            账户与安全
+          </button>
           <div className="local-indicator">
-            <span /> 本地工作空间
+            <span /> {auth.publicUrl ? '安全工作空间' : '本地工作空间'}
           </div>
           <p>所有重要变更，由你确认。</p>
           <button
@@ -365,6 +386,8 @@ function App() {
               setBusy(true);
               try {
                 await api.logout();
+                clearOAuthRequest();
+                setAccountOpen(false);
                 setSnapshot(emptySnapshot);
                 setAuth(await api.auth());
                 setProjectId(null);
@@ -379,6 +402,23 @@ function App() {
           </button>
         </div>
       </aside>
+      {accountOpen && (
+        <AccountSettings
+          auth={auth}
+          onClose={() => setAccountOpen(false)}
+          onAuth={(status) => {
+            setAuth(status);
+            if (!status.authenticated) {
+              setAccountOpen(false);
+              setSnapshot(emptySnapshot);
+              setProjectId(null);
+              setEditor(null);
+              setReview(null);
+              setNotice('');
+            }
+          }}
+        />
+      )}
       <main className="main">
         <div className="topbar">
           <span>
@@ -387,7 +427,7 @@ function App() {
           <div>
             <span className="connection">
               <i />
-              本地
+              {auth.publicUrl ? '已登录' : '本地'}
             </span>
             <button
               className="secondary compact"

@@ -78,3 +78,11 @@ All implemented features are described accurately; checks distinguish pass/fail/
 ## Suggested Execution Order
 
 Execute T001 through T007 in order, reviewing one task at a time. T005 and T006 may be verified independently after their dependencies are complete. Do not commit without authorization and the required review gates.
+
+## Account and MCP OAuth follow-up
+
+- [x] T010 [P0] Complete native single-owner accounts and MCP OAuth
+      Goal: Preserve data/passwords; add persistent/revocable sessions, canonical HTTPS, consent, PKCE, scopes, credential rotation and revocation.
+      Modules: server/http, server/oauth, server/mcp, web, tests and docs.
+      Verify: Aggregate checks, migration/session/proxy/CSRF tests, OAuth + official SDK integration, isolated Chrome account flows.
+      Publication: Normal source commit/push authorized after completion. No deployment.

@@ -49,3 +49,17 @@ The smoke test used only its own random temporary volume and container. The nati
 ## Source publication authorization
 
 After local verification, the user authorized committing and pushing the completed source to https://github.com/zcorw/project-release-hub. The existing destination was verified empty, public, and writable; its reported default branch was main. The local commit convention requires a feature branch, so source delivery uses feat/zhixu-workflows. A source-only scan of all 67 candidate files found no database, backup, log, private key, token, credential URL, or personal machine path. The public destination does not satisfy the private GHCR publication gate. No visibility, variables, secrets, package publishing, or deployment changes are included. Push and hosted CI results must be verified separately.
+
+## Native accounts and OAuth follow-up
+
+Date: 2026-11-10. Existing data/passwords are preserved; all automated tests use disposable databases, servers and volumes.
+
+- npm run check passed: formatting, strict TypeScript, 97 unit/integration tests across 10 files, and production build.
+- Six isolated Chrome tests passed. Four mock account API edge states; one exercises real OAuth login, consent denial/allow, cross-origin loopback callback and code exchange; the existing workspace scenario now also exercises real password change, cancellation, other-session revocation and logout-all.
+- Official MCP SDK tests exercise actual Express routes through a simulated HTTPS proxy: discovery, consent/PKCE, scoped reads/writes, pending edits/deletes, bearer/web separation, token refresh, revocation and persistence. The SDK's resource-aware refresh helper passes.
+- Account tests cover v1 hash migration, stable-secret restart, current/other session revocation, offline reset, expiry, stale session saves, CSRF and Host/Origin/proxy/Secure-cookie rules.
+- Security review found and resolved same-client reconsent scope inconsistency; replacement consent now revokes prior credentials. Real Chrome verification found and resolved consent form referrer/CSP callback restrictions.
+- A fresh Linux image built successfully, and its isolated non-root/read-only container smoke passed: health on default/custom ports, hostile Host, login/setup, disabled local MCP, SQLite persistence and restart isolation. Native Node 22.12 initially exited with unsettled top-level await in the existing smoke harness. A wrapper keeping the event loop alive and bounding HTTP to five seconds passed, without changing production code or the harness. Temporary containers/volumes were removed.
+- Desktop/mobile account layout checked for horizontal overflow and screenshots inspected. No real user database was opened by tests.
+
+Not performed: real TLS/Nginx/firewall deployment, external ChatGPT onboarding, independent penetration/load testing, production restore, or remote updater adaptation. The VPS helper still rejects extra remote environment overrides. Source push and hosted CI status are separate verification steps.

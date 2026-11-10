@@ -183,4 +183,55 @@ test('local workspace: validation, CRUD, review, duplicates, undo, login, and re
     ),
   ).toHaveLength(1);
   await page.unroute('**/api/changes');
+  // Real backend account flow on this test's disposable database.
+  const otherContext = await page
+    .context()
+    .browser()!
+    .newContext({ baseURL: 'http://127.0.0.1:4311' });
+  const other = await otherContext.newPage();
+  await other.goto('/');
+  await other.getByLabel('密码', { exact: true }).fill(password);
+  await other.getByRole('button', { name: '进入工作空间', exact: true }).click();
+  await expect(other.getByRole('heading', { name: '项目总览', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '账户与安全', exact: true }).click();
+  dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('当前会话', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('其他会话', { exact: true })).toBeVisible();
+  await page.screenshot({
+    path: 'test-results/account-security.png',
+    fullPage: true,
+    animations: 'disabled',
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: 'test-results/account-security-mobile.png',
+    fullPage: true,
+    animations: 'disabled',
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await dialog.getByLabel('当前密码', { exact: true }).fill(password);
+  await dialog.getByLabel('新密码', { exact: true }).fill('updated-browser-test-password');
+  await dialog.getByLabel('确认新密码', { exact: true }).fill('updated-browser-test-password');
+  await dialog.getByRole('button', { name: '修改密码', exact: true }).click();
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  expect((await other.request.get('/api/snapshot')).status()).toBe(200);
+  await dialog.getByRole('button', { name: '修改密码', exact: true }).click();
+  await dialog.getByRole('button', { name: '确认操作', exact: true }).click();
+  await expect(
+    dialog.getByText('密码已更新，其他会话与 OAuth 授权已撤销。', { exact: true }),
+  ).toBeVisible();
+  expect((await other.request.get('/api/snapshot')).status()).toBe(401);
+  expect((await page.request.get('/api/snapshot')).status()).toBe(200);
+  await dialog.getByRole('button', { name: '退出全部会话', exact: true }).click();
+  await dialog.getByRole('button', { name: '确认操作', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '欢迎回来', exact: true })).toBeVisible();
+  await page.getByLabel('密码', { exact: true }).fill('updated-browser-test-password');
+  await page.getByRole('button', { name: '进入工作空间', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '项目总览', exact: true })).toBeVisible();
+  await otherContext.close();
 });

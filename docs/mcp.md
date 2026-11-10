@@ -1,10 +1,10 @@
-# Local MCP Guide
+# MCP Guide
 
 ## Transport and boundary
 
 Streamable HTTP, POST http://127.0.0.1:4310/mcp. Configure HUB_MCP_TOKEN in the server's environment and send it through the Authorization: Bearer header. Use at least 32 random characters. The token is not a web password and cannot approve web changes.
 
-The server is loopback-only, rejects unexpected Host headers, and does not provide remote OAuth. No remote ChatGPT connection is configured. A hosted, authenticated integration is separate work, not a matter of exposing this development server.
+The default mode is loopback-only. Optional HTTPS mode now provides OAuth discovery, registration, explicit consent, S256 PKCE, scoped resource-bound tokens, rotation and revocation. See [account and OAuth guide](account-oauth.md). No real ChatGPT connection is configured. Remote mode rejects HUB_MCP_TOKEN and uses OAuth instead.
 
 ## Tools
 

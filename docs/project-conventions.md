@@ -22,7 +22,7 @@ Reuse React Hook Form + Zod + zodResolver and Radix Dialog, as already used by t
 
 ## Security
 
-Local loopback by default. Single-user password hashing and session auth. CSRF protection for web writes. MCP uses a separate configured token and never a web session. Never store secrets in source, logs, API results, or documentation. No arbitrary URL fetching: GitHub requests target api.github.com with validated owner/repo paths. Do not initiate deployments or workflow runs.
+Local loopback by default. Single-user password hashing and session auth. CSRF protection for web writes. MCP uses a separate local token or scoped OAuth credential and never a web session. Remote mode requires canonical HTTPS and explicit proxy trust; see account-oauth.md. Never store secrets in source, logs, API results, or documentation. No arbitrary URL fetching: GitHub requests target api.github.com with validated owner/repo paths. Do not initiate deployments or workflow runs.
 
 ## Checks and delivery
 
