@@ -24,7 +24,7 @@ git pull --ff-only
 bash scripts/update-vps.sh
 ```
 
-The default path builds the checked-out code locally on the VPS. It does not depend on GHCR. This is the usable path for the current public source repository because the existing GHCR workflow deliberately requires a separately approved private repository. The script does not alter that gate.
+The default path builds the checked-out code locally on the VPS and does not depend on GHCR. Alternatively, the public source repository can publish a private GHCR image through the separately dispatched workflow described in github-actions.md. Source visibility does not determine package visibility; this updater neither publishes images nor changes that workflow.
 
 The update sequence is:
 
@@ -60,13 +60,13 @@ Keep .deploy/ private and preserve it across source updates. Do not commit it or
 
 ## Optional immutable registry image
 
-Only use an image from a separately approved and trusted registry destination. Authenticate outside this script when necessary; never pass a token in the image reference or commit credentials.
+Only use an image from an approved and trusted registry destination. For this repository, use the exact ghcr.io/zcorw/project-release-hub@sha256:... reference recorded by a successful publishing job. The package stays private: the VPS must already be authenticated to GHCR as an account allowed to read that package, with a classic PAT limited to read:packages where applicable. Authenticate outside this script using docker login ghcr.io with --password-stdin; never put a token in command arguments, an image reference, source, or deployment records. Source publication alone does not create an image or give the VPS registry access.
 
 ```bash
 bash scripts/update-vps.sh --image registry.example/team/zhixu@sha256:<64-hex-manifest-digest>
 ```
 
-Replace the example with a real immutable digest. Mutable tags such as latest are rejected. The pull resolves the platform-specific local image ID, and the container is started with that exact ID. An inaccessible registry fails before replacement. This mode does not publish anything or bypass the current GHCR guard.
+Replace the example with a real immutable digest. Mutable tags such as latest are rejected. The pull resolves the platform-specific local image ID, and the container is started with that exact ID. An inaccessible registry fails before replacement. This mode does not publish anything, change package visibility, or bypass GHCR authentication. See github-actions.md for publication requirements and copy/fork behavior.
 
 ## Interrupted or failed updates
 

@@ -65,9 +65,11 @@ GitHub repository values use owner/repo. Refresh runs only when you click “手
 
 ## GitHub Actions and container packaging
 
-The repository now includes automatic checks and a separate manually triggered private-GHCR image workflow, following Zhijiao. Publication is gated by the exact IMAGE_PUBLISH_REPOSITORY repository variable, private visibility, the default branch, and successful checks. Only the publishing job receives packages:write on the automatic GITHUB_TOKEN; no extra secrets are needed.
+The repository includes automatic checks and a separately dispatched private-GHCR image workflow. Publication requires manual dispatch from the repository's default branch, successful checks, a private existing package (or a new package), and an unused commit tag. No IMAGE_PUBLISH_REPOSITORY variable is required. Only the publishing job receives packages:write on the automatic GITHUB_TOKEN; no extra secrets are needed.
 
-The user subsequently authorized committing and pushing the source to [zcorw/project-release-hub](https://github.com/zcorw/project-release-hub). This repository is public: checks can run, but the private-image publication workflow deliberately refuses publication from it. Repository visibility, Actions variables, and secrets are not changed. See [workflow setup and local Docker guide](docs/github-actions.md) for the gates and storage precautions.
+The source repository [zcorw/project-release-hub](https://github.com/zcorw/project-release-hub) is public. Source and GHCR package visibility are separate: public source may publish a private image. Existing non-private packages are rejected; new GHCR packages are private by default and must be verified after their first publication. This workflow never changes package visibility or deploys the application.
+
+Image names follow the repository executing the workflow: ghcr.io/<lowercase-owner>/<lowercase-repository>. Running a copied workflow in a separate GitHub repository therefore targets that repository's package, not the original package. See [workflow setup, copy/fork behavior, and local Docker guide](docs/github-actions.md). The JavaScript Actions use Node 24; the application and container remain on their existing Node 22 versions.
 
 ## VPS image update helper
 
