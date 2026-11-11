@@ -63,3 +63,17 @@ Date: 2026-11-10. Existing data/passwords are preserved; all automated tests use
 - Desktop/mobile account layout checked for horizontal overflow and screenshots inspected. No real user database was opened by tests.
 
 Not performed: real TLS/Nginx/firewall deployment, external ChatGPT onboarding, independent penetration/load testing, production restore, or remote updater adaptation. The VPS helper still rejects extra remote environment overrides. Source push and hosted CI status are separate verification steps.
+
+## Private GHCR workflow follow-up
+
+Date: 2026-11-11. This update supersedes the earlier source-private/IMAGE_PUBLISH_REPOSITORY activation requirements; historical verification above remains a record of the earlier revisions.
+
+- npm run check passed: formatting (including workflow YAML parsing), strict TypeScript, 97 unit/integration tests across 10 files, and production build.
+- All six isolated Chrome scenarios passed.
+- The Python updater suite passed 20 tests and skipped the Linux-only flock case on Windows; Ubuntu CI covers that case.
+- Docker Compose configuration validation passed. Local image build/container smoke were not rerun because the Docker Desktop Linux engine was not running; the unchanged application/container inputs are still checked by the full Ubuntu workflow after push.
+- Eighteen isolated Bash checks passed: syntax of all four run blocks; user/organization target derivation; invalid target rejection; private/public/internal/404/403/network visibility results; existing/absent/unauthorized/network/unexpected commit-tag inspection results. Registry commands were mocked, and temporary outputs were removed. An initial test-harness attempt used /dev/stdout, unavailable under this Git Bash session; it was corrected to a temporary output file and the complete suite passed.
+- Official action.yml manifests verified Node 24 for checkout/setup-node/upload-artifact v7, setup-buildx/login v4, and build-push v7. Application Node 22.23.4 and the local Node installation were not changed.
+- Independent read-only review found no blocking workflow or documentation issue. Manual/default-branch dispatch, reusable checks, scoped token permissions, dynamic image targets, private-package checks, and commit-tag protection remain intact.
+
+Not performed: a real GHCR publication, package visibility change, registry-permission setup, or VPS deployment. New packages rely on GHCR's private-by-default behavior and require a first-publication visibility check by the operator. Preflight visibility/tag checks cannot prevent simultaneous external administrator or writer changes. Hosted CI results for the exact pushed commit are separate evidence; a green run with a skipped publishing job is not a successful publication.

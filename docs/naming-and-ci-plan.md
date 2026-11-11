@@ -17,7 +17,7 @@ The local Zhijiao repository has .github/workflows/check.yml and image.yml. Its 
 - Use the same Ubuntu and Node pins as the reference.
 - Replace PostgreSQL and Zhijiao-specific scripts with this project's SQLite tests, aggregate check, browser tests, and container smoke test.
 - Add a non-root local-use container and a loopback-only Compose port mapping. Native startup remains bound to 127.0.0.1 by default. A container-specific bind override does not relax the HTTP Host check or web-only approval boundary.
-- Keep publication disabled until an explicit repository variable matches the current repository. This checkout has no remote or commits, so no destination can be assumed.
+- Initially, publication required a matching repository variable and private source repository. On 2026-11-11, the user approved removing those source restrictions while retaining manual/default-branch publication, complete checks, private GHCR package checks, and commit-tag protection. The target remains derived from the repository running the workflow; see github-actions.md.
 - Reuse GitHub's automatic GITHUB_TOKEN for GHCR, scoped to the publishing job. No PAT, SSH, VPS, application password, or MCP token belongs in CI.
 - Exclude local databases, backups, environment files, credentials, and local tooling from the image context.
 - The initial naming/workflow request covered local files only. The later instruction authorizes source commit/push to zcorw/project-release-hub; it does not authorize manual dispatch, deployment, external settings changes, or persistent access.

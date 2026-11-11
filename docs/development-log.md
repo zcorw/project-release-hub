@@ -81,3 +81,11 @@ Result: existing single-owner password/data retained; persistent bounded session
 Validation: npm run check passed with 97 tests, six Chrome scenarios passed including real OAuth callback and account-security flows, and a freshly built disposable Linux container passed smoke checks. Independent source review's confirmed scope-display issue was fixed and reproduced as resolved. Browser verification fixed same-origin form Origin/referrer and cross-origin callback CSP handling. See verification.md for the local Node smoke-harness workaround and unrun live checks.
 
 No real account/data migration, domain/proxy/firewall change, ChatGPT connection, or deployment was performed. The existing VPS updater remains loopback-only and rejects remote overrides. New source is intended for an authorized normal push, without force or automatic merge/deployment.
+
+## Step 11: Private GHCR publishing from public source
+
+Date: 2026-11-11. The user approved removing the remaining source-repository variable/private-visibility gates, updating deployment documentation, and committing/pushing the changes. Their existing removal of the repository-name comparison was preserved. This supersedes the original private-source gate recorded in Steps 8-9 and the source-publication notes.
+
+The workflow still requires manual dispatch on the default branch and complete checks. Image/package names follow the executing repository; existing packages must be private, existing commit tags are refused, and no package visibility change or deployment is performed. All six JavaScript Actions were updated to official Node 24 versions without changing application Node 22. The operator guide now covers public source/private images, copied repositories, and authenticated immutable-digest pulls.
+
+Validation: independent static review found no blocking issue. Local aggregate checks, all six Chrome scenarios, the Windows updater suite, Compose configuration, and 18 isolated workflow syntax/target/privacy/tag checks passed; see verification.md for exact coverage and limits. No GHCR login, package publication, workflow dispatch, or live VPS operation was performed. Source delivery uses a feature branch from current origin/main; hosted CI must be checked for the pushed commit separately.

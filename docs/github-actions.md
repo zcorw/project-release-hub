@@ -6,7 +6,7 @@ Zhixu (知序) follows the existing Zhijiao pattern: automatic checks and a sepa
 
 ### Checks
 
-.github/workflows/check.yml runs on pushes, pull requests, manual dispatch, and workflow_call. It uses Ubuntu 24.04 and Node 22.23.4, the same pins as the reviewed Zhijiao configuration.
+.github/workflows/check.yml runs on pushes, pull requests, manual dispatch, and workflow_call. It uses Ubuntu 24.04 and application Node 22.23.4, the same application/runtime pins as the reviewed Zhijiao configuration. The JavaScript Actions themselves use Node 24: checkout/setup-node/upload-artifact v7, setup-buildx/login v4, and build-push v7. Updating the Actions runtime does not upgrade the application runtime or the local computer.
 
 Checks install the locked dependencies, run npm run check (formatting, TypeScript, unit/integration tests, and build), install Playwright Chromium, run the browser scenario against a fresh temporary database, validate Compose, build the image without pushing, and run the isolated container smoke test.
 
@@ -16,21 +16,28 @@ No secrets are required. The job has read-only repository permission. Pull reque
 
 .github/workflows/image.yml runs only by workflow_dispatch. It calls the complete checks workflow before its publishing job.
 
-The selected source destination is [zcorw/project-release-hub](https://github.com/zcorw/project-release-hub), verified public on 2026-11-10. Source commit/push is authorized, but no visibility change or package publication is authorized. Checks can run in this public repository; image publication remains blocked by the private-repository guard. Do not set the gate to bypass this difference.
+The source destination is [zcorw/project-release-hub](https://github.com/zcorw/project-release-hub), a public repository. Source repository visibility and GHCR package visibility are separate. Public or private source repositories can use this workflow to publish a private image. There is no repository-name allowlist, private-source requirement, or IMAGE_PUBLISH_REPOSITORY variable gate.
 
-If a private publication destination is separately authorized later:
+Before an authorized publication:
 
-1. Choose and explicitly authorize the private GitHub repository. The current public source destination must not silently be made private or replaced.
-2. After separately authorized publication of the source, set the repository Actions variable IMAGE_PUBLISH_REPOSITORY to the exact owner/repository string shown by GitHub. An absent/mismatched variable skips the publishing job.
-3. Keep the repository private. The workflow also requires the default branch and refuses an existing GHCR package unless its visibility is private.
-4. Allow the publishing job's packages:write permission through any organization policy. An existing package must grant this repository Actions access. Do not change a public package's visibility merely to work around a failed guard.
-5. Manually dispatch Publish approved image from the default branch when ready to publish that specific revision.
+1. Review and merge the intended workflow/source revision into the repository's default branch. Feature-branch dispatches run checks but skip the publishing job.
+2. Confirm that repository/organization policy permits the publishing job's packages:write permission. If the target package already exists, it must be private and grant this repository Actions access. Do not change a public package's visibility to bypass a failed check.
+3. Manually dispatch Publish approved image from the default branch for that specific revision. A normal source push or pull request only runs Checks; it does not publish an image.
+4. Confirm the publish job actually succeeded, not merely that the workflow was green with publication skipped. Check the recorded digest and, after the first publication, verify the package is private in GitHub Packages.
 
-The only credential used is GitHub's automatically supplied GITHUB_TOKEN. Do not add a PAT, SSH key, VPS password, application login password, GITHUB_TOKEN value, or HUB_MCP_TOKEN to this repository for these workflows. IMAGE_PUBLISH_REPOSITORY is a non-secret variable, not a secret.
+The only publishing credential is GitHub's automatically supplied GITHUB_TOKEN. Do not add a PAT, SSH key, VPS password, application login password, GITHUB_TOKEN value, or HUB_MCP_TOKEN to these workflows. An old IMAGE_PUBLISH_REPOSITORY variable is ignored; no variable or secret needs to be created, changed, or removed for this update.
 
-The image is ghcr.io/<lowercase-owner>/<lowercase-repository>:sha-<full-commit-sha>, for linux/amd64. Existing commit tags are not overwritten. Visibility/registry failures block publication rather than guessing. The workflow attaches provenance and an SBOM, then records the immutable ghcr.io/...@sha256:... reference in the run summary and an image-reference artifact. No latest tag is published and no deployment is performed.
+The image is ghcr.io/<lowercase-owner>/<lowercase-repository>:sha-<full-commit-sha>, for linux/amd64. Existing commit tags are not overwritten. A visible existing package must report private; a non-private package or an unexpected visibility API error blocks publication. An HTTP 404 permits the new-package path but does not grant access to an inaccessible existing package. Registry authentication/permission errors still block the push. Repository and organization policies may prevent publication.
 
-GHCR packages are private by default when first created. Verify the new package remains private after the first authorized run. Repository and organization policies may still prevent publication.
+New GHCR packages are private by default. The workflow does not call a visibility-changing API. Verify the package remains private after first publication and do not change it to public. The workflow attaches provenance and an SBOM, then records the immutable ghcr.io/...@sha256:... reference in the run summary and an image-reference artifact. No latest tag is published and no deployment is performed. A public source repository's Actions logs, summaries, and image reference may be visible publicly; knowing a private image's name or digest does not grant pull access.
+
+### Copies and forks
+
+The image target and package visibility API path are derived from github.repository, not a hard-coded upstream destination. A workflow running in another owner/repository writes to that repository's GHCR namespace. It does not change the original repository, its Actions variables, or its image tags. Merely cloning locally while retaining the original Git remote is different: pushes still go to that remote, and this workflow runs in whichever GitHub repository receives the source.
+
+GitHub forks/new repositories do not automatically copy the original repository's Actions secrets or variables. GITHUB_TOKEN is issued for the repository running the job; existing package access must be granted to that repository. A fork may also need Actions enabled before its owner can manually dispatch the workflow. There is no pull_request_target trigger, and pull requests never run the publishing job.
+
+This isolation depends on preserving the dynamic target and scoped token. A later change that hard-codes the original package and supplies credentials or package permissions able to write it could affect that package. Do not copy a broad PAT or grant a copied repository access to the original package for this workflow.
 
 ## Local container use
 
@@ -81,4 +88,4 @@ The later user instruction authorizes committing and pushing the source to https
 
 ## Manual VPS update tooling
 
-The later request adds a manually invoked updater in scripts/update-vps.sh. It uses local builds by default, keeps the existing loopback-only Compose/SQLite boundary, and records verified immutable image IDs. It does not connect to or deploy a server during implementation. See [the operator guide](vps-update.md). The current public repository still does not satisfy the private-image publication gate. Ubuntu Checks also runs the isolated Python updater regression suite.
+The later request adds a manually invoked updater in scripts/update-vps.sh. It uses local builds by default, keeps the existing loopback-only Compose/SQLite boundary, and records verified immutable image IDs. It does not connect to or deploy a server during implementation. See [the operator guide](vps-update.md). A separately authorized private GHCR publication can now originate from the public source repository; the updater still does not publish or authenticate to GHCR. Ubuntu Checks also runs the isolated Python updater regression suite.

@@ -1,6 +1,6 @@
 name: Publish approved image
 # Manual publishing only. This workflow never connects to a VPS.
-# Configure IMAGE_PUBLISH_REPOSITORY only after approving the private destination.
+# Public or private source repositories may publish a private GHCR package.
 on:
   workflow_dispatch:
 permissions:
@@ -14,8 +14,6 @@ jobs:
   publish:
     needs: checks
     if: >-
-      vars.IMAGE_PUBLISH_REPOSITORY != '' &&
-      github.repository == vars.IMAGE_PUBLISH_REPOSITORY &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -23,18 +21,16 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Require the approved private repository
+      - name: Derive the image target from this repository
         id: target
         env:
-          IS_PRIVATE: ${{ github.event.repository.private }}
           REPOSITORY: ${{ github.repository }}
           OWNER_TYPE: ${{ github.event.repository.owner.type }}
         run: |
           set -euo pipefail
-          test "$IS_PRIVATE" = true
           repository="${REPOSITORY,,}"
           owner="${repository%/*}"
           package="${repository#*/}"
@@ -59,8 +55,8 @@ jobs:
             echo 'Could not verify package visibility; publication blocked.' >&2
             exit 1
           fi
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -84,7 +80,7 @@ jobs:
           fi
       - name: Build and publish
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64
@@ -105,7 +101,7 @@ jobs:
           [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
           printf '%s@%s\n' "$IMAGE" "$DIGEST" >image-reference.txt
           printf 'Validated commit: `%s`\n\nImage: `%s@%s`\n\nNo deployment was performed.\n' "$GITHUB_SHA" "$IMAGE" "$DIGEST" >>"$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: image-reference-${{ github.sha }}
           path: image-reference.txt
