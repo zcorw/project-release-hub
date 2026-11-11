@@ -19,6 +19,14 @@ import uuid
 IMAGE_ID = re.compile(r"sha256:[a-f0-9]{64}\Z")
 REGISTRY_DIGEST = re.compile(r"[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}\Z")
 ROOT = Path(__file__).resolve().parent.parent
+FIXED_ENVIRONMENT = {"PORT": "4310", "HUB_BIND_HOST": "0.0.0.0", "HUB_DATA_DIR": "/app/data"}
+OPTIONAL_ENVIRONMENT = ("GITHUB_TOKEN", "HUB_MCP_TOKEN", "HUB_PUBLIC_URL", "HUB_SESSION_SECRET", "HUB_TRUST_PROXY")
+
+
+def resolved_environment(app):
+    # Compose config doubles literal dollars for reusable output, including JSON.
+    # Docker receives the original value; compare against inspect without that escaping.
+    return {key: value.replace("$$", "$") for key, value in app.get("environment", {}).items() if value is not None}
 
 
 class UpdateError(RuntimeError):
@@ -77,6 +85,7 @@ class Updater:
         self.latest = self.state / "latest-image.json"
         self.pending = self.state / "pending-update.json"
         self.overlay = self.state / "selected-image.json"
+        self.env_file = self.root / ".env"
         self.compose = [
             "docker", "compose", "--project-directory", str(self.root),
             "--project-name", "zhixu", "--env-file", os.devnull,
@@ -115,6 +124,8 @@ class Updater:
         contexts = self.docker_json("context", "inspect")
         if len(contexts) != 1 or not contexts[0].get("Endpoints", {}).get("docker", {}).get("Host", "").startswith("unix://"):
             raise UpdateError("Only a local Linux Docker engine is supported; remote contexts are refused.")
+        # Resolve only this checkout's .env; Compose retains normal shell precedence.
+        self.compose[self.compose.index("--env-file") + 1] = str(self.env_file) if self.env_file.exists() else os.devnull
         config = json.loads(self.run(self.compose + ["config", "--format", "json"]))
         if set(config.get("services", {})) != {"app"}:
             raise UpdateError("Expected the single app service in compose.yml.")
@@ -128,14 +139,27 @@ class Updater:
             raise UpdateError("Unexpected container network/filesystem/security configuration.")
         if "ALL" not in app.get("cap_drop", []) or "no-new-privileges:true" not in app.get("security_opt", []):
             raise UpdateError("Expected dropped capabilities and no-new-privileges.")
-        if app.get("environment") or app.get("env_file") or app.get("command") or app.get("entrypoint"):
-            raise UpdateError("Custom runtime configuration needs a separate deployment review.")
+        environment = app.get("environment") or {}
+        if not isinstance(environment, dict) or set(environment) - set(FIXED_ENVIRONMENT) - set(OPTIONAL_ENVIRONMENT):
+            raise UpdateError("Only the documented GitHub/MCP/OAuth environment settings are allowed.")
+        if any(environment.get(key) != value for key, value in FIXED_ENVIRONMENT.items()):
+            raise UpdateError("Container PORT, HUB_BIND_HOST and HUB_DATA_DIR must retain their fixed values.")
+        if any(value is not None and not isinstance(value, str) for value in environment.values()):
+            raise UpdateError("Container environment values must be strings or unset.")
+        if app.get("env_file") or app.get("command") or app.get("entrypoint"):
+            raise UpdateError("Custom environment files, commands and entrypoints are not supported.")
+        self.environment = resolved_environment(app)
         mounts = app.get("volumes", [])
         if len(mounts) != 1 or mounts[0].get("type") != "volume" or mounts[0].get("target") != "/app/data" or mounts[0].get("read_only"):
             raise UpdateError("Expected one writable named SQLite volume at /app/data.")
         self.volume = config.get("volumes", {}).get(mounts[0]["source"], {}).get("name")
         if self.volume != "zhixu_zhixu-data":
             raise UpdateError("Refusing to change the existing zhixu_zhixu-data volume.")
+        return config
+
+    def environment_matches(self, container):
+        actual = dict(item.split("=", 1) for item in container.get("Config", {}).get("Env", []) if "=" in item)
+        return all(actual.get(key) == self.environment.get(key) for key in (*FIXED_ENVIRONMENT, *OPTIONAL_ENVIRONMENT))
 
     def current(self):
         ids = self.run(self.compose + ["ps", "--all", "--quiet", "app"]).split()
@@ -199,6 +223,8 @@ class Updater:
             state = container.get("State", {})
             health = state.get("Health", {}).get("Status")
             if state.get("Running") and health == "healthy":
+                if not self.environment_matches(container):
+                    raise UpdateError("Running container environment differs from the selected .env/shell settings.")
                 return container
             if health == "unhealthy" or state.get("Status") in ("exited", "dead"):
                 raise UpdateError("Updated container failed its health check.")
@@ -212,12 +238,13 @@ class Updater:
         return {
             "actualImageId": container.get("Image") if container else None,
             "actualHealth": container.get("State", {}).get("Health", {}).get("Status") if container else None,
+            "environmentMatches": self.environment_matches(container) if container else None,
             "latestSuccessful": json.loads(self.latest.read_text(encoding="utf-8")) if self.latest.exists() else None,
             "pendingAttempt": json.loads(self.pending.read_text(encoding="utf-8")) if self.pending.exists() else None,
         }
 
     def update(self, registry_image=None, rollback=None, recover=False):
-        self.validate_config()
+        configuration = self.validate_config()
         if recover:
             if not self.pending.exists():
                 raise UpdateError("No interrupted attempt exists to verify.")
@@ -266,6 +293,8 @@ class Updater:
                 backup = self.backup(old, run_id)
         if self.run(["git", "rev-parse", "HEAD"]) != checkout or self.run(["git", "status", "--porcelain", "--untracked-files=normal"]):
             raise UpdateError("Source changed during preparation; refusing replacement.")
+        if self.validate_config() != configuration:
+            raise UpdateError("Compose or environment settings changed during preparation; refusing replacement.")
         # Recheck before replacement; never overwrite a concurrent external container change.
         actual = self.current()
         if (actual or {}).get("Id") != (old or {}).get("Id") or (actual or {}).get("Image") != (old or {}).get("Image"):

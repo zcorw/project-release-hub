@@ -86,3 +86,11 @@ Execute T001 through T007 in order, reviewing one task at a time. T005 and T006 
       Modules: server/http, server/oauth, server/mcp, web, tests and docs.
       Verify: Aggregate checks, migration/session/proxy/CSRF tests, OAuth + official SDK integration, isolated Chrome account flows.
       Publication: Normal source commit/push authorized after completion. No deployment.
+
+## Compose and VPS environment follow-up
+
+- [x] T011 [P0] Pass project-root .env settings through Compose and the VPS updater
+      Goal: Apply GitHub/MCP/OAuth configuration during first install and immutable-image updates while preserving SQLite storage, loopback ports and secret handling.
+      Modules: compose.yml, scripts/update-vps.py, tests, .env.example and operator docs.
+      Verify: Real Compose resolution, updater environment/failure regressions, aggregate checks, affected browser flows and available isolated container checks.
+      Publication: Source commit/push authorized after verification. No image publication or live VPS operation requested.

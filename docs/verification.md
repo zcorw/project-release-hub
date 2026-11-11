@@ -77,3 +77,17 @@ Date: 2026-11-11. This update supersedes the earlier source-private/IMAGE_PUBLIS
 - Independent read-only review found no blocking workflow or documentation issue. Manual/default-branch dispatch, reusable checks, scoped token permissions, dynamic image targets, private-package checks, and commit-tag protection remain intact.
 
 Not performed: a real GHCR publication, package visibility change, registry-permission setup, or VPS deployment. New packages rely on GHCR's private-by-default behavior and require a first-publication visibility check by the operator. Preflight visibility/tag checks cannot prevent simultaneous external administrator or writer changes. Hosted CI results for the exact pushed commit are separate evidence; a green run with a skipped publishing job is not a successful publication.
+
+## Compose and VPS .env follow-up
+
+Date: 2026-11-11. This supersedes the earlier claim that the updater rejects all remote environment settings. The documented GitHub/MCP/OAuth variables are now supported; actual remote deployment remains unperformed.
+
+- npm run check passed: formatting, strict TypeScript, all 97 application unit/integration tests and production build. The initial sandbox attempt could not connect to temporary localhost services; the unrestricted local rerun passed without changing application code.
+- All six isolated Chrome scenarios passed, including OAuth login/consent/callback, account controls, and workspace CRUD/review/undo.
+- The Python suite contains 32 tests. Windows with ZHIXU_TEST_IMAGE=zhixu:env-ci passed 31 and skipped only Linux flock. A networkless Linux build-stage container with a read-only repository mount passed all 27 updater tests including real flock; its five Docker CLI/container checks were skipped because no Docker CLI/socket was supplied.
+- Real Compose tests use disposable .env fixtures and copied Compose files, covering absent settings, the native example, shell precedence, literal dollar signs, local-token and OAuth settings, and fixed container paths/ports. A UUID-named Compose project created real containers for both local and OAuth configurations, checked actual Docker environment values and removed only its own containers/volume/network. No real operator .env was read.
+- Build and container smoke passed for the fresh Linux image. The existing Node 22.12 smoke harness again exited with unsettled top-level await on its first direct attempt; the documented keep-alive wrapper with five-second HTTP timeouts passed non-root/read-only startup, health on default/custom ports, Host validation, setup/authentication, SQLite persistence and restart isolation. Production code and the harness were unchanged.
+- Updater regressions cover the selected .env for build/pull/status/recovery, rejected environment overrides, configuration changes before replacement, stale-environment recovery refusal and secret-free command/state/status output, including failed replacement journals. CI runs the real container injection check after building its local image.
+- Bash syntax and final formatting/diff checks passed. Windows sandbox restrictions on atomic replacement in its temporary directory were avoided by using a workspace-owned disposable test directory or the unrestricted local test process.
+
+Not performed: a live VPS install/update, real GHCR pull/authentication/publication, public TLS/Nginx validation or ChatGPT onboarding. Source commit/push was separately authorized after this verification; remote delivery results must be checked separately.

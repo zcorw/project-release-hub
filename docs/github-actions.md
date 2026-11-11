@@ -41,7 +41,7 @@ This isolation depends on preserving the dynamic target and scoped token. A late
 
 ## Local container use
 
-The container is a packaging option for local single-user use, not authorization or hardening for internet hosting. Docker Desktop must be running in Linux-container mode.
+The container packages the single-owner application. Backend port publication stays loopback-only; optional HTTPS/OAuth requires an independently configured proxy following account-oauth.md. Docker Desktop must be running in Linux-container mode for local checks.
 
 To build and start it locally:
 
@@ -49,7 +49,7 @@ To build and start it locally:
 docker compose up --build -d
 ```
 
-Open http://127.0.0.1:4310. Stop any native instance using that port first. Compose binds the host port to 127.0.0.1, runs as non-root, drops capabilities, uses a read-only root filesystem, and keeps SQLite in a named volume. The image is built from an explicit allowlist of source inputs, excluding data, backups, environment files, and credentials.
+Open http://127.0.0.1:4310 in local mode. Stop any native instance using that port first. Compose automatically reads the project-root .env and forwards only GITHUB_TOKEN, HUB_MCP_TOKEN, HUB_PUBLIC_URL, HUB_SESSION_SECRET and HUB_TRUST_PROXY; shell values take precedence and unset options remain absent. Container port/bind/data settings remain fixed regardless of native values in .env. Compose binds the host port to 127.0.0.1, runs as non-root, drops capabilities, uses a read-only root filesystem, and keeps SQLite in a named volume. The image is built from an explicit allowlist of source inputs, excluding data, backups, environment files, and credentials.
 
 The container has its own initially empty database. It does not import or alter ./data/hub.db from the native application. Set up a password on the first container visit. Do not point multiple app instances at the same SQLite database.
 
@@ -78,9 +78,9 @@ The smoke test uses a random container name, a fresh temporary volume, and an ep
 
 ## Runtime boundary
 
-Native startup still defaults to 127.0.0.1. HUB_BIND_HOST=0.0.0.0 is an explicit container-only option set in the Dockerfile so host-to-container port forwarding works. The HTTP Host allowlist, login/CSRF checks, and web-only confirmation boundary remain unchanged. Binding all interfaces alone does not make this a safe public service. Never publish the Docker port on 0.0.0.0 or expose it through a public reverse proxy in this MVP.
+Native startup still defaults to 127.0.0.1. HUB_BIND_HOST=0.0.0.0 is an explicit container-only option pinned by Dockerfile/Compose so host-to-container port forwarding works. The HTTP Host allowlist, login/CSRF checks, and web-only confirmation boundary remain unchanged. Keep the Docker host port on 127.0.0.1. Configure optional remote HTTPS/OAuth only through a controlled proxy following account-oauth.md.
 
-Compose does not inject runtime GitHub/MCP credentials. Remote ChatGPT connectivity, OAuth, TLS/public hosting, and VPS deployment require a separate security design and authorization.
+Compose injects only the documented optional GitHub/MCP/OAuth settings from .env or the shell. This does not bake credentials into an image, configure TLS, deploy a VPS or create a ChatGPT connection. Initialize the owner privately before enabling remote mode.
 
 ## Delivery boundary
 

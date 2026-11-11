@@ -18,7 +18,7 @@ Backups include password hashes, session state and hashed OAuth credentials. Kee
 
 ## Remote configuration
 
-The application does not automatically load .env. Configure secrets in the service/container environment, outside Git and chat:
+Native npm startup reads the shell/service environment, not .env. Docker Compose and scripts/update-vps.sh now read the repository-root .env and forward the five documented GitHub/MCP/OAuth settings, with shell values taking precedence. Keep unused optional settings commented out. Configure secrets outside Git and chat:
 
 - HUB_PUBLIC_URL: canonical HTTPS origin, such as https://zhixu.example.com. No path, query, fragment or credentials.
 - HUB_SESSION_SECRET: at least 48 cryptographically random characters, generated and securely stored once. Rotation logs out browsers; use logout-all to also revoke OAuth.
@@ -27,7 +27,7 @@ The application does not automatically load .env. Configure secrets in the servi
 - HUB_DATA_DIR: retain the existing persistent directory.
 - Remove HUB_MCP_TOKEN. Combining local static credentials with remote OAuth is rejected at startup.
 
-The existing Compose and VPS updater deliberately remain loopback-only. The updater refuses custom environment/environment-file overrides, including remote variables. Do not bypass its guards. A remote operator needs a separately reviewed deployment configuration; adapting the updater is separate work.
+Compose and the VPS updater keep the backend loopback-only and now accept the documented GitHub/MCP/OAuth environment settings. Container PORT, HUB_BIND_HOST and HUB_DATA_DIR stay fixed at 4310, 0.0.0.0 and /app/data. Other runtime environment keys, custom commands, storage changes and public port publication remain rejected. The operator still configures and validates the actual HTTPS proxy, domain and certificate independently; no live deployment is claimed.
 
 The direct proxy seen inside Docker may be the bridge gateway, not 127.0.0.1. Inspect the actual topology and trust its narrow address, not a guessed subnet. Never publish the upstream port to the internet. Host filtering is not protection against a direct client forging Host: localhost in local mode.
 

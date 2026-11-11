@@ -18,3 +18,16 @@ The user requested a script under scripts/ to update a Docker image after code c
 ## Verification
 
 Use Python unit tests with a fake Docker adapter for success, build/pull/backup/start failures, immutable identity, storage safety, state-write failures, rollback, and concurrency. Include them in the Ubuntu checks workflow. Run the repository aggregate checks and existing browser/container checks where supported. A real VPS update is not part of verification.
+
+## Environment support follow-up (2026-11-11)
+
+Confirmed request: Compose and the VPS updater must consume the operator's project-root .env, including when an immutable GHCR image is selected. This supersedes the original blanket rejection of runtime environment configuration. Implementation/testing is authorized; source publication, image publication and operating a live VPS are separate actions.
+
+Implementation decisions recorded before changes:
+
+- Let Compose resolve its normal shell-over-.env precedence. Explicitly pass only GITHUB_TOKEN, HUB_MCP_TOKEN, HUB_PUBLIC_URL, HUB_SESSION_SECRET and HUB_TRUST_PROXY into the app. Leave unset optional variables absent, so existing images retain local-mode behavior. Unused optional settings should stay commented out.
+- Pin container PORT=4310, HUB_BIND_HOST=0.0.0.0 and HUB_DATA_DIR=/app/data in Compose. Native settings in the same .env must not redirect SQLite or alter the reviewed loopback port mapping.
+- Have the updater explicitly select the project-root .env when present and otherwise use an empty environment file. Keep explicit Compose files/project names and reject arbitrary container environment keys, entrypoints, commands, storage changes and public port bindings.
+- Preserve existing application configuration validation, OAuth consent/scopes, local-token/remote-OAuth exclusivity and web-only confirmation. Remote configuration uses the already implemented HTTPS/proxy validation; privately initialize the owner before enabling OAuth.
+- Capture resolved configuration in memory, recheck it before replacement and verify effective container configuration without writing secrets into records, overlays, logs or command arguments. Keep .env outside Git and build inputs.
+- Verify real Compose resolution with disposable fixture files, updater failure/recovery regressions, application checks, browser account/OAuth flows and container checks when the local engine is available. No real operator .env or live VPS is needed.

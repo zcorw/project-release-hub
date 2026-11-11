@@ -33,3 +33,7 @@ See mvp-development-plan.md, stage records, project-conventions.md, and TODO.md 
 ## Account and OAuth follow-up
 
 The user requested native account completion and MCP OAuth without nest-account, then authorized source push after completion. Existing owner/data/passwords are preserved. Persistent sessions, password changes, security controls and optional HTTPS OAuth are implemented. A real ChatGPT connection and deployment are not provisioned.
+
+## Compose and VPS environment follow-up
+
+The user explicitly requested that Compose and the update script use the project-root .env. Both now forward the documented GitHub/MCP/OAuth settings, with shell precedence and fixed container storage/port/bind settings. The updater rechecks resolved configuration before replacement and verifies the running container environment without including secrets in its state or output. This supersedes the original blanket environment-override restriction; it does not provision a live VPS, proxy, domain or ChatGPT connection.
