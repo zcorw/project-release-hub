@@ -54,12 +54,12 @@ Set variables in the same terminal before starting the server:
 
 - PORT: API/built-app port, default 4310. The development proxy assumes the default port.
 - HUB_DATA_DIR: directory containing hub.db, default ./data.
-- HUB_BIND_HOST: defaults to 127.0.0.1. The Dockerfile alone opts into 0.0.0.0 inside a container whose host port must remain loopback-only.
+- HUB_BIND_HOST: defaults to 127.0.0.1. Dockerfile and Compose pin 0.0.0.0 inside a container whose host port must remain loopback-only.
 - GITHUB_TOKEN: optional GitHub token. Public repositories can work without a token; private repositories require access with read-only Actions permission.
 - HUB_MCP_TOKEN: local-only static token of at least 32 characters.
 - HUB_PUBLIC_URL, HUB_SESSION_SECRET, HUB_TRUST_PROXY: optional HTTPS/OAuth mode; see [account and OAuth guide](docs/account-oauth.md). MCP is disabled unless a local token or remote OAuth is configured.
 
-.env.example is a reference only; the app does not automatically load .env. Never paste tokens into a project description or commit them.
+For Docker Compose and scripts/update-vps.sh, copy .env.example to a private .env in the repository root. Both read the five optional GitHub/MCP/OAuth settings; shell values take precedence. Compose keeps the container port, bind address and data directory fixed at 4310, 0.0.0.0 and /app/data, regardless of native settings in .env. Keep unused optional settings commented out. Native npm startup still requires shell variables and does not automatically load .env. Never paste tokens into a project description or commit them.
 
 GitHub repository values use owner/repo. Refresh runs only when you click “手动刷新”. This version does not trigger workflows, deploy releases, or write to GitHub.
 
@@ -75,7 +75,7 @@ Image names follow the repository executing the workflow: ghcr.io/<lowercase-own
 
 After updating a clean, committed checkout on an independently prepared Linux VPS, run `bash scripts/update-vps.sh`. It builds locally by default, backs up the existing SQLite database, updates the exact image ID, and records the latest verified image in `.deploy/latest-image.json` only after health succeeds. Use `bash scripts/update-vps.sh --status` to inspect actual versus saved state.
 
-This is operator tooling, not a live deployment or permission to expose the MVP publicly. Keep loopback-only access. See the [VPS update and recovery guide](docs/vps-update.md) for prerequisites, immutable digest pulls, failures, backups, and explicit image-only rollback.
+The updater reads the project-root .env for both local builds and --image digest pulls. Keep the backend port loopback-only; optional HTTPS/OAuth uses an independently configured reverse proxy. This source change does not operate a VPS or provision public access. See the [VPS update and recovery guide](docs/vps-update.md) for environment setup, prerequisites, immutable digest pulls, failures, backups, and explicit image-only rollback.
 
 ## MCP and ChatGPT
 

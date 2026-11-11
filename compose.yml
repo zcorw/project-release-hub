@@ -4,6 +4,15 @@ services:
     image: zhixu:local
     build: .
     init: true
+    environment:
+      PORT: '4310'
+      HUB_BIND_HOST: 0.0.0.0
+      HUB_DATA_DIR: /app/data
+      GITHUB_TOKEN:
+      HUB_MCP_TOKEN:
+      HUB_PUBLIC_URL:
+      HUB_SESSION_SECRET:
+      HUB_TRUST_PROXY:
     ports:
       - '127.0.0.1:4310:4310'
     volumes:

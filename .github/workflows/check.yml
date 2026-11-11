@@ -33,5 +33,9 @@ jobs:
         run: docker compose config --quiet
       - name: Build application image without publishing
         run: docker build --tag zhixu:ci .
+      - name: Verify environment injection into isolated Compose containers
+        env:
+          ZHIXU_TEST_IMAGE: zhixu:ci
+        run: python3 -m unittest discover -s tests -p 'test_update_vps.py' -v
       - name: Check container health, security, and persistence
         run: npm run test:container -- zhixu:ci
