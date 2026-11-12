@@ -7,7 +7,7 @@ The user requested Zhixu's own account system and MCP OAuth without nest-account
 ## Accounts and migration
 
 - Schema version 2 adds authentication versions, persistent sessions and security events without replacing account or business records. Newer unsupported schema versions fail closed. Back up before upgrading.
-- Setup is available only in local mode. Remote mode always rejects setup; initialize privately through loopback or an SSH tunnel before enabling HTTPS/OAuth. Existing databases need no password reset.
+- Web setup is available only in local mode. Remote mode always rejects web setup; initialize through the local container command below, including when HTTPS/OAuth is already enabled. Existing databases need no password reset.
 - Session identifiers are SHA-256-hashed in SQLite. Sessions expire after 12 hours idle or 7 days absolute. A stable HUB_SESSION_SECRET preserves login across restarts; without it local mode still requires login after restart.
 - Login and password change rotate session IDs and CSRF tokens. Password change verifies the current password, retains the current browser under a new session, and invalidates other sessions and all OAuth credentials.
 - Account security controls list/revoke sessions and OAuth grants. Logout-all ends the current browser and invalidates all OAuth credentials. Ordinary logout affects only its browser session.
@@ -15,6 +15,30 @@ The user requested Zhixu's own account system and MCP OAuth without nest-account
 - Account security audit retains 1,000 events. OAuth audit retains the newest 1,000 events, at most 90 days; cleanup occurs on new events. The UI shows at most 100 combined events. Business mutation history is unchanged.
 
 Backups include password hashes, session state and hashed OAuth credentials. Keep them private. A restored older backup can restore previously revoked state: reset the password and rotate HUB_SESSION_SECRET before exposing a restored instance. Image-only rollback is not a database migration rollback.
+
+## Initialize the first administrator
+
+After the application container has started, run from the VPS project directory:
+
+```bash
+docker compose -p zhixu -f compose.yml exec app npm run init-admin
+```
+
+The command reads a hidden password and confirmation from the terminal. Use 12-128 characters. Keep TTY allocation enabled (no -T); Ctrl-C or EOF cancels without creating an account. It uses the running container's HUB_DATA_DIR/hub.db, requires that database to exist, and refuses an existing owner before asking for input. It creates the account and account_created security event in one transaction using the shared validation and scrypt hashing. No password argument or password environment variable is supported.
+
+Refresh the web page after success and log in with that password. The running app sees the new account without restart. This works with HUB_PUBLIC_URL already enabled and never enables remote web setup. There is a single owner and no separate username to supply. Password changes and forgotten-password recovery continue to use their existing paths.
+
+Inside an already opened container shell, run npm run init-admin from /app. For native startup, use the same command with the application's HUB_DATA_DIR in the shell environment; native scripts do not automatically load .env.
+
+Controlled automation can stream a single password line through stdin:
+
+```bash
+password-provider | docker compose -p zhixu -f compose.yml exec -T app npm run init-admin -- --password-stdin
+```
+
+password-provider is a placeholder for your private secret source, not a bundled command. Stdin mode reads until EOF, accepts an optional final LF/CRLF and skips confirmation. It applies the same validation/existing-account guards and never echoes input. Avoid putting a password literal in shell history. --help prints usage without opening a database.
+
+The image must contain this script. Pulling source alone does not modify a running container; use a newly built/published image containing this change and update the container through the existing updater. No image publication or VPS operation is performed by adding the script.
 
 ## Remote configuration
 

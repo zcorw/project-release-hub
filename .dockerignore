@@ -13,6 +13,9 @@
 !web/**
 !scripts/
 !scripts/backup.ts
+!scripts/init-admin.ts
+!scripts/lib/
+!scripts/lib/terminal-password.ts
 !scripts/reset-password.ts
 # Re-exclude credentials even if someone places them inside a source directory.
 **/.env

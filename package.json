@@ -17,6 +17,7 @@
     "format:check": "prettier --check .",
     "check": "npm run format:check && npm run typecheck && npm test && npm run build",
     "test:e2e": "playwright test",
+    "init-admin": "tsx scripts/init-admin.ts",
     "reset-password": "tsx scripts/reset-password.ts",
     "backup": "tsx scripts/backup.ts",
     "test:container": "node scripts/test-container.mjs"

@@ -110,3 +110,11 @@ Execute T001 through T007 in order, reviewing one task at a time. T005 and T006 
       Modules: compose.yml, scripts/update-vps.py, tests, .env.example and operator docs.
       Verify: Default/custom/invalid port resolution, mismatched mapping rejection, normal update/retry and real isolated custom-port startup/health.
       Publication: Separate source commit and shared-branch push authorized. No live VPS/proxy operation or image publication requested.
+
+## Local administrator initialization
+
+- [x] T014 [P0] Package administrator initialization as a local container script
+      Goal: Create the missing owner through a short command with hidden password confirmation, shared validation/hashing, atomic audit and existing-account protection.
+      Modules: scripts, package.json, Docker build allowlist, tests and account/operator docs.
+      Verify: Interactive/stdin input, validation, existing-account and rollback guards, live status/login, packaging and disposable container execution.
+      Publication: Source commit/push authorized after verification; no image publication or live VPS operation requested.
