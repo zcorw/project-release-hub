@@ -12,6 +12,7 @@ A local-first web workspace for personal software projects, concrete feature pla
 - Single-owner accounts with persistent sessions, password changes, session/grant revocation, and CSRF-protected web writes.
 - Optional HTTPS/OAuth mode with explicit consent, S256 PKCE, scoped tokens, rotation, and revocation.
 - Atomic batches, stable request IDs, optimistic revisions, duplicate-project review, and human confirmation.
+- Browser reconciliation of stale proposals: preserve applied fields, choose conflicts, generate a fresh pending proposal, then confirm separately.
 - Audit snapshots and conflict-aware undo. Undo never silently overwrites a newer record or leaves dangling references.
 - Explicit, read-only GitHub Actions refresh with last-successful cache and clear failure states. CI success never changes release or environment state.
 - A real local Streamable HTTP MCP endpoint, tested using the official MCP client SDK. New records can save directly; edits/deletes are proposals that only the web user can approve.
@@ -136,6 +137,7 @@ To reset a forgotten password, stop the server, set HUB_RESET_PASSWORD to the ne
 - GitHub adapter tests use fixtures; real private-repository access is not verified.
 - The web audit view shows the latest 100 events. Earlier events remain in SQLite; all pending requests remain discoverable.
 - Undo is refused if newer revisions or reference constraints make it unsafe.
+- Proposal reconciliation compares whole fields (including text); missing historical bases or deleted targets require manual handling. See the [reconciliation guide](docs/proposal-rebase-plan.md#using-reconciliation).
 - No multi-user permissions, password recovery email, or automatic backup schedule.
 - Source commit/push is authorized to zcorw/project-release-hub only. No image publication, deployment, or changes to persistent computer permissions are included.
 

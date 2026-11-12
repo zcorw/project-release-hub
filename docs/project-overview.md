@@ -43,3 +43,7 @@ The subsequent failed-update follow-up adds --retry: after correcting .env, the 
 ## Local administrator initialization follow-up
 
 The user requested a short command to create the initial administrator inside the VPS Docker container. npm run init-admin now hides and confirms terminal input, reuses shared validation/hashing and atomically creates the missing owner with a security event. It refuses existing accounts and works while remote web setup stays disabled. The running app recognizes the account without restart. Stdin automation is explicit. This is local source implementation; source/image publication and live VPS operations are not included. See admin-initialization-plan.md and account-oauth.md.
+
+## Stale proposal reconciliation follow-up
+
+The user requested rebasing stale proposals onto latest records while preserving applied changes, choosing conflicts and retaining final web confirmation. The implementation uses field-level three-way comparison, historical-base recovery, snapshot-bound previews and atomic linked pending replacements. Generating a replacement never applies records, including create-only remainders. Missing bases/deleted targets block reconciliation; text is resolved as a whole field. See proposal-rebase-plan.md for decisions, operator steps and verification. After verification, the user authorized a separate source commit and normal push on the existing working branch; no merge, image publication or deployment is included.

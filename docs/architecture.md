@@ -6,6 +6,7 @@ Status: single-owner application with optional HTTPS/OAuth, 2026-11-10.
 - Express + TypeScript HTTP server and the official MCP SDK.
 - A shared application service validates writes, resolves references, detects duplicates, stages changes, applies approvals, and records audit snapshots.
 - SQLite via better-sqlite3 provides local persistence, transactions, sessions, and audit history.
+- Proposal reconciliation stores base snapshots in request JSON, recovers legacy bases from complete audit snapshots, and compares base/current/proposed fields. Authenticated web preview/generation routes create a linked pending replacement atomically; the normal confirmation path remains the only application boundary. No database schema migration or new MCP capability is required.
 
 ## Boundaries
 

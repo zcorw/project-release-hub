@@ -128,6 +128,28 @@ export class Repository {
       { data: string } | undefined;
     return row ? (JSON.parse(row.data) as AuditEvent) : undefined;
   }
+  entityRevision(id: string, revision: number): Entity | undefined {
+    const current = this.get(id);
+    if (current && !current.deleted && current.entity.revision === revision) return current.entity;
+    // Search all audit snapshots, including events outside the UI's latest-100 window.
+    const row = this.db
+      .prepare(
+        `
+      SELECT json_extract(c.value, '$.before') AS snapshot
+      FROM audit a, json_each(a.data, '$.changes') c
+      WHERE json_extract(c.value, '$.id') = ?
+        AND json_extract(c.value, '$.before.revision') = ?
+      UNION ALL
+      SELECT json_extract(c.value, '$.after') AS snapshot
+      FROM audit a, json_each(a.data, '$.changes') c
+      WHERE json_extract(c.value, '$.id') = ?
+        AND json_extract(c.value, '$.after.revision') = ?
+      LIMIT 1
+    `,
+      )
+      .get(id, revision, id, revision) as { snapshot: string } | undefined;
+    return row ? (JSON.parse(row.snapshot) as Entity) : undefined;
+  }
   saveAudit(event: AuditEvent): void {
     this.db
       .prepare(

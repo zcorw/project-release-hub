@@ -233,6 +233,12 @@ export function createApp(options: AppOptions) {
   app.get('/api/snapshot', (_req, res) => res.json(hub.snapshot()));
   app.get('/api/changes/:id', (req, res) => res.json(hub.request(z.uuid().parse(req.params.id))));
   app.post('/api/changes', (req, res) => res.json(hub.submit(req.body, 'web')));
+  app.get('/api/changes/:id/rebase', (req, res) =>
+    res.json(hub.previewRebase(z.uuid().parse(req.params.id))),
+  );
+  app.post('/api/changes/:id/rebase', (req, res) =>
+    res.json(hub.rebase(z.uuid().parse(req.params.id), req.body)),
+  );
   app.post('/api/changes/:id/confirm', (req, res) =>
     res.json(hub.confirm(z.uuid().parse(req.params.id))),
   );

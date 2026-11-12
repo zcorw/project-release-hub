@@ -159,6 +159,37 @@ export const batchSchema = z
   .strict();
 export type BatchInput = z.infer<typeof batchSchema>;
 export const undoSchema = z.object({ requestId: z.uuid(), auditId: z.uuid() }).strict();
+export const rebaseSchema = z
+  .object({
+    requestId: z.uuid(),
+    previewToken: z.string().regex(/^[a-f0-9]{64}$/),
+    resolutions: z
+      .array(
+        z
+          .object({
+            id: z.uuid(),
+            field: z.string().min(1).max(80),
+            choice: z.enum(['current', 'proposed']),
+          })
+          .strict(),
+      )
+      .max(400),
+  })
+  .strict();
+export type RebaseInput = z.infer<typeof rebaseSchema>;
+export interface RebaseItem {
+  operation: Operation;
+  base: Entity | null;
+  current: Entity | null;
+  merged: EntityData | null;
+  conflicts: string[];
+}
+export interface RebasePreview {
+  requestId: string;
+  token: string;
+  items: RebaseItem[];
+  blockers: { id: string; message: string }[];
+}
 export const passwordSchema = z.string().min(12, '密码至少 12 位').max(128, '密码最多 128 位');
 export const loginSchema = z.object({ password: z.string().min(1, '请输入密码').max(128) });
 export const setupSchema = z
@@ -199,6 +230,9 @@ export interface ChangeRequest {
   operations: Operation[];
   auditId?: string;
   duplicates: DuplicateCandidate[];
+  baseEntities?: Record<string, Entity>;
+  rebasedFrom?: string;
+  supersededBy?: string;
   result?: { auditId: string; entities: Entity[] };
 }
 export interface ActionRun {

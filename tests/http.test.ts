@@ -3,6 +3,8 @@ import request from 'supertest';
 import { randomUUID } from 'node:crypto';
 import { Repository } from '../server/infrastructure/database';
 import { createApp } from '../server/http/app';
+import { HubService } from '../server/application/hub';
+import { entityData } from '../shared/schema';
 let repository: Repository, app: ReturnType<typeof createApp>['app'];
 beforeEach(() => {
   repository = new Repository(':memory:');
@@ -128,5 +130,68 @@ describe('local authentication and HTTP writes', () => {
   });
   it('keeps MCP disabled when not explicitly configured', async () => {
     expect((await request(app).post('/mcp').send({})).status).toBe(503);
+  });
+  it('keeps reconciliation behind web login/CSRF and requires separate application', async () => {
+    const hub = new HubService(repository);
+    const project = hub.submit(
+      {
+        requestId: randomUUID(),
+        operations: [{ action: 'create', entity: { kind: 'project', name: 'Reconcile' } }],
+      },
+      'mcp',
+    ).result!.entities[0];
+    const source = hub.submit(
+      {
+        requestId: randomUUID(),
+        operations: [
+          {
+            action: 'update',
+            id: project.id,
+            expectedRevision: 1,
+            entity: { ...entityData(project), description: 'Wanted' },
+          },
+        ],
+      },
+      'mcp',
+    );
+    const path = '/api/changes/' + source.id + '/rebase';
+    expect((await request(app).get(path)).status).toBe(401);
+    expect(
+      (await request(app).post(path).set('Authorization', 'Bearer test-only-token').send({}))
+        .status,
+    ).toBe(401);
+    const { agent, csrf } = await signedIn();
+    const preview = await agent.get(path);
+    expect(preview.status).toBe(200);
+    expect(preview.headers['cache-control']).toBe('no-store');
+    const input = { requestId: randomUUID(), previewToken: preview.body.token, resolutions: [] };
+    expect((await agent.post(path).send(input)).status).toBe(403);
+    expect(
+      (
+        await agent
+          .post(path)
+          .set('X-CSRF-Token', csrf)
+          .send({ ...input, operations: [] })
+      ).status,
+    ).toBe(400);
+    const result = await agent.post(path).set('X-CSRF-Token', csrf).send(input);
+    expect(result.status).toBe(200);
+    expect(result.body.status).toBe('pending');
+    expect(repository.get(project.id)!.entity).toMatchObject({ description: '', revision: 1 });
+    expect((await agent.post(path).set('X-CSRF-Token', csrf).send(input)).body).toEqual(
+      result.body,
+    );
+    expect((await agent.post('/api/changes/' + result.body.id + '/confirm').send({})).status).toBe(
+      403,
+    );
+    const confirmed = await agent
+      .post('/api/changes/' + result.body.id + '/confirm')
+      .set('X-CSRF-Token', csrf)
+      .send({});
+    expect(confirmed.body.status).toBe('applied');
+    expect(repository.get(project.id)!.entity).toMatchObject({
+      description: 'Wanted',
+      revision: 2,
+    });
   });
 });
