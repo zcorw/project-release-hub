@@ -17,6 +17,7 @@ import {
 } from '../shared/schema';
 import { api, errorText } from './api';
 import { AccountSettings, clearOAuthRequest, resumeOAuth } from './account';
+import { RebaseDialog } from './rebase';
 import type { AuthStatus } from './types';
 import { EntityForm, Modal, RecordDetails, Tag, kindNames, label } from './components';
 import './styles.css';
@@ -163,6 +164,7 @@ function App() {
   const [editor, setEditor] = useState<{ kind: Kind; existing?: Entity } | null>(null);
   const [review, setReview] = useState<ChangeRequest | null>(null);
   const [reviewError, setReviewError] = useState('');
+  const [rebaseOpen, setRebaseOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refreshingActions, setRefreshingActions] = useState(false);
   const [search, setSearch] = useState('');
@@ -219,6 +221,7 @@ function App() {
   }
   function showReview(value: ChangeRequest) {
     setReviewError('');
+    setRebaseOpen(false);
     setReview(value);
   }
   async function propose(operations: Operation[]) {
@@ -276,7 +279,7 @@ function App() {
       await reload();
     } catch (err) {
       setReviewError(
-        `${errorText(err)} 如数据已变化，请关闭此窗口并刷新，核实最新状态后重新提出变更。`,
+        `${errorText(err)} ${review.mode === 'batch' ? '可点击「基于最新记录重新合并」生成新提案，再核对并确认。' : '请关闭此窗口并刷新，核实最新状态后手动调整。'}`,
       );
     } finally {
       setBusy(false);
@@ -971,7 +974,32 @@ function App() {
           onClose={() => setEditor(null)}
         />
       )}
-      {review && !editor && (
+      {review && !editor && rebaseOpen && (
+        <RebaseDialog
+          request={review}
+          entities={entities}
+          requestId={requestId}
+          onBack={() => setRebaseOpen(false)}
+          onGenerated={async (result) => {
+            setRebaseOpen(false);
+            if (result.status === 'pending') {
+              showReview(result);
+              setNotice('新提案已生成，原提案已被替代。请核对后点击「确认并应用」。');
+            } else {
+              setReview(null);
+              setNotice(
+                result.status === 'applied'
+                  ? '此新提案已经确认并应用，请核对最新记录。'
+                  : result.supersededBy
+                    ? '此新提案已被其他提案替代，请查看待确认变更。'
+                    : '此新提案已被拒绝，请核对最新状态。',
+              );
+            }
+            await reload();
+          }}
+        />
+      )}
+      {review && !editor && !rebaseOpen && (
         <Modal
           title={review.mode === 'undo' ? '确认撤销操作' : '确认变更提案'}
           description="请检查下面的具体内容。只有点击「确认并应用」后，这些变更才会写入。"
@@ -984,6 +1012,11 @@ function App() {
               <span>{dateTime(review.createdAt)}</span>
               <span>请求编号：{review.id}</span>
             </div>
+            {review.rebasedFrom && (
+              <p className="warning">
+                此提案基于最新记录重新合并，原提案已被替代。尚未应用任何修改。
+              </p>
+            )}
             {review.duplicates.length > 0 && (
               <div className="warning">
                 <strong>发现疑似重复项目</strong>
@@ -1068,6 +1101,11 @@ function App() {
             <button className="danger-quiet" disabled={busy} onClick={() => void decide('reject')}>
               拒绝此变更
             </button>
+            {review.mode === 'batch' && (
+              <button className="secondary" disabled={busy} onClick={() => setRebaseOpen(true)}>
+                基于最新记录重新合并
+              </button>
+            )}
             <button
               disabled={
                 busy ||

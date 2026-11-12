@@ -149,3 +149,17 @@ Validation: npm run check passed formatting, strict TypeScript, all 115 tests an
 Review: PASS for the HTML reference, production asset and Docker allowlist. No persistent user data, source commit/push or deployment was involved.
 
 After verification, the user authorized committing and pushing the favicon integration and generated branding assets to the existing remote on the current working branch. This is separate from the administrator initialization commit; no merge, image publication or deployment is included.
+
+## Step 17: Reconcile stale proposals in the browser
+
+Date: 2026-11-12. Confirmed request: generate a fresh proposal from current records, preserve previously applied edits, let the user choose conflicts and retain final web confirmation. Scope and merge semantics were recorded in proposal-rebase-plan.md before implementation. T016 is complete.
+
+Result: new proposals retain base snapshots; old proposals recover bases from complete audit history. Base/current/proposed comparisons preserve nonconflicting fields and require explicit choices for field conflicts or changed deletion targets. Read-only previews bind generation to target snapshots. Generation reuses shared schema/domain validation, remains atomic/idempotent, supersedes the original with links and always creates a pending replacement, including create-only remainders. The normal confirmation still checks revisions and newly discovered duplicates. Missing bases/deleted targets cannot be silently overwritten. No MCP approval/reconciliation capability was introduced.
+
+The existing dialog now offers 基于最新记录重新合并, displays original/latest/proposed conflict values and a merged preview, and opens the standard review after generation. Preview races require explicit refresh/reselection; interrupted generation retries preserve the request ID. If another window already applied or rejected the replacement, retry shows that final status instead of claiming it is still pending. Canceling before generation changes nothing.
+
+Validation: npm run check passed formatting, strict TypeScript, all 131 service/integration tests and production build. npm run test:e2e passed all 11 Chrome scenarios, including five real-backend reconciliation scenarios. Mobile conflict and desktop confirmation screenshots were visually reviewed; whitespace/diff checks passed. The first sandboxed check hit localhost EACCES, and the run with local network access passed. Tests used temporary/in-memory databases, not user data.
+
+Review: PASS after inspecting comparison semantics, historical lookup, atomic supersession, immutable/reference/schema/duplicate rules, preview and confirmation races, web-only auth/CSRF, retry outcomes and final UI. Text conflicts are resolved per whole field; unavailable bases/deleted targets and invalid combined constraints require manual adjustment. No commit/push, registry publication, persistent external access or live deployment was requested or performed.
+
+After verification, the user authorized a separate Conventional Commit for stale proposal reconciliation and a normal push to the existing zcorw/project-release-hub remote. Delivery reuses fix/private-ghcr-workflow. The source implementation and verification are unchanged; only this authorization record is added. Remote delivery results are verified separately. No merge, image publication or deployment is included.

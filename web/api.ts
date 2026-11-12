@@ -1,5 +1,12 @@
 import type { AccountSecurity, AuthStatus } from './types';
-import type { ActionsSnapshot, ChangeRequest, Operation, Snapshot } from '../shared/schema';
+import type {
+  ActionsSnapshot,
+  ChangeRequest,
+  Operation,
+  Snapshot,
+  RebaseInput,
+  RebasePreview,
+} from '../shared/schema';
 
 export class ApiError extends Error {
   constructor(
@@ -84,6 +91,10 @@ export const api = {
     request<ChangeRequest>('/api/changes', { requestId, operations }),
   review: (id: string, action: 'confirm' | 'reject') =>
     request<ChangeRequest>(`/api/changes/${encodeURIComponent(id)}/${action}`, {}),
+  previewRebase: (id: string) =>
+    request<RebasePreview>(`/api/changes/${encodeURIComponent(id)}/rebase`),
+  rebase: (id: string, input: RebaseInput) =>
+    request<ChangeRequest>(`/api/changes/${encodeURIComponent(id)}/rebase`, input),
   undo: (requestId: string, auditId: string) =>
     request<ChangeRequest>('/api/undo', { requestId, auditId }),
   actions: (id: string) =>

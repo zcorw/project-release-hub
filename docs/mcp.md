@@ -66,6 +66,8 @@ An update requires action=update, id, expectedRevision, and the complete entity 
 
 A delete requires action=delete, id, and expectedRevision. Deletes are recoverable tombstones. Deleting a record with active dependents is rejected; unlink or include the dependent records explicitly, then review the complete batch.
 
+Stale proposals can be reconciled in the web review dialog using base/current/proposed field comparison. The user selects conflicting values and generates a new pending request before separately confirming it. Replacements use a new requestId with rebasedFrom; the source is retained as rejected with supersededBy. hub_get_request reports those links. Do not retry a superseded proposal with edited revisions or claim the replacement has been applied. New requests retain base snapshots; legacy bases are recovered from complete audit history when available. MCP gains no reconciliation or approval tool. See [the reconciliation guide](proposal-rebase-plan.md#using-reconciliation).
+
 Entity kinds cannot change. A record cannot move between projects. Feature/task/issue references must stay inside the same project. Version names are unique within a project. Marking a release as released requires releasedDate.
 
 ## Ownership of analysis

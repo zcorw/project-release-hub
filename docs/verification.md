@@ -124,3 +124,14 @@ Date: 2026-11-12. Added npm run init-admin for local operator initialization in 
 - The local Node 22.12 smoke used the previously documented keep-alive wrapper with five-second fetch timeouts. A sandboxed HTTP attempt was denied by local network restrictions; the authorized unrestricted test process passed. No real operator database or .env was read.
 
 No source commit/push, image publication, live VPS operation, proxy configuration or ChatGPT connection was performed. Old published images do not acquire the new script from a source-only pull; an image containing this change is required.
+
+## Stale proposal reconciliation
+
+Date: 2026-11-12. Decisions and user steps are recorded in proposal-rebase-plan.md. Generation creates a new pending proposal with a supersession link; application remains a separate authenticated web confirmation.
+
+- npm run check passed formatting, strict TypeScript, all 131 tests across 12 files and production build. Fifteen new service cases and one HTTP case cover three-way field comparison, both conflict choices, missing/duplicate/extra resolutions, legacy bases beyond 100 audit events, missing/deleted targets, changed deletions, create-only remainders, empty results, schema/reference/duplicate validation, preview/confirmation races, idempotency, supersession rollback and session/CSRF isolation.
+- npm run test:e2e passed all 11 isolated Chrome scenarios. Five new real-backend flows cover legacy nonconflicting reconciliation/cancellation, conflict selection and live merged preview, changed-preview refresh, interrupted-response stable retry, changed deletion retention, missing-base/deleted-target blockers and a retry after another window confirms the replacement. Existing account, OAuth, CRUD and undo checks remain green.
+- Inspected mobile conflict and desktop confirmation screenshots. The mobile page has no horizontal overflow; dialog actions remain reachable. Final diff review and whitespace checks passed. No database migration is needed: new base snapshots and links use optional request JSON properties.
+- The initial sandboxed aggregate check could not connect to temporary localhost services (EACCES); rerunning with local network access passed. Browser tests used a fresh temporary workspace database plus separate in-memory reconciliation databases. No normal user database or operator .env was read.
+
+Text conflicts are whole-field selections. Unavailable historical bases/deleted targets block automatic reconciliation; combined invalid dates or references prevent generation without changing the original request. Container smoke was not rerun for this application-only feature. No source commit/push, image publication or live deployment was requested or performed.

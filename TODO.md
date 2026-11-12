@@ -126,3 +126,11 @@ Execute T001 through T007 in order, reviewing one task at a time. T005 and T006 
       Modules: index.html, assets/branding, Docker build allowlist and implementation log.
       Verify: Aggregate checks, existing Chrome flows and real browser loading of the built favicon.
       Publication: Source commit/push authorized after verification; no deployment requested.
+
+## Stale proposal reconciliation
+
+- [x] T016 [P0] Reconcile stale proposals with current records
+      Goal: Preserve applied changes, choose field conflicts in the browser and generate a fresh pending proposal requiring separate web confirmation.
+      Modules: shared contracts, application/domain service, SQLite history lookup, HTTP, web, tests and docs.
+      Verify: Three-way merge, legacy bases, deletions, atomicity, concurrent changes, idempotency, web-only security and affected browser flows; aggregate checks and diff review.
+      Publication: Source commit/push authorized after verification on the existing working branch; no merge, image publication or deployment requested.

@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   batchSchema,
   undoSchema,
+  rebaseSchema,
+  entityData,
   entityDataSchema,
   entityLabel,
   type Entity,
@@ -10,10 +12,13 @@ import {
   type AuditEvent,
   type ChangeRequest,
   type Snapshot,
+  type RebasePreview,
+  type RebaseItem,
 } from '../../shared/schema';
 import { Repository } from '../infrastructure/database';
 import { AppError } from '../domain/errors';
 import { findDuplicates, validateRelationships } from '../domain/rules';
+import { mergeFields, sameData } from '../domain/rebase';
 
 type Source = 'web' | 'mcp';
 type Plan = { state: Map<string, Entity>; changes: AuditChange[]; touched: Set<string> };
@@ -52,12 +57,138 @@ export class HubService {
         createdAt: new Date().toISOString(),
         operations,
         duplicates,
+        baseEntities: this.bases(plan),
       };
       if (operations.every((op) => op.action === 'create') && duplicates.length === 0)
         this.apply(request, plan);
       this.repository.saveRequest(request, fingerprint);
       return request;
     });
+  }
+  previewRebase(id: string): RebasePreview {
+    return this.repository.transaction(() => this.rebasePreview(id));
+  }
+  rebase(id: string, input: unknown): ChangeRequest {
+    const parsed = rebaseSchema.parse(input);
+    const fingerprint = hash({ mode: 'rebase', sourceRequestId: id, ...parsed });
+    return this.repository.transaction(() => {
+      const replay = this.replay(parsed.requestId, fingerprint);
+      if (replay) return replay;
+      const preview = this.rebasePreview(id);
+      if (preview.token !== parsed.previewToken)
+        throw new AppError(
+          'REBASE_CHANGED',
+          '记录在预览后又有变化，请重新读取最新记录并核对冲突',
+          409,
+        );
+      if (preview.blockers.length)
+        throw new AppError(
+          'REBASE_BLOCKED',
+          '部分记录无法安全合并，请查看原因后手动处理',
+          409,
+          preview.blockers,
+        );
+      const choices = new Map<string, 'current' | 'proposed'>();
+      const conflictKeys = new Set(
+        preview.items.flatMap((item) =>
+          item.conflicts.map((field) => item.operation.id + ':' + field),
+        ),
+      );
+      for (const resolution of parsed.resolutions) {
+        const key = resolution.id + ':' + resolution.field;
+        if (choices.has(key) || !conflictKeys.has(key))
+          throw new AppError('INVALID_RESOLUTION', '冲突选择重复或不属于本次预览');
+        choices.set(key, resolution.choice);
+      }
+      if (choices.size !== conflictKeys.size)
+        throw new AppError('UNRESOLVED_CONFLICTS', '请为每一处冲突选择保留内容');
+      const operations: Operation[] = [];
+      for (const item of preview.items) {
+        const op = item.operation;
+        if (op.action === 'create') {
+          operations.push(op);
+        } else if (op.action === 'delete') {
+          if (choices.get(op.id + ':$delete') !== 'current')
+            operations.push({ ...op, expectedRevision: item.current!.revision });
+        } else {
+          const merged = { ...item.merged } as unknown as Record<string, string>;
+          for (const field of item.conflicts)
+            if (choices.get(op.id + ':' + field) === 'proposed')
+              merged[field] = (op.entity as unknown as Record<string, string>)[field];
+          const entity = entityDataSchema.parse(merged);
+          if (!sameData(entity, entityData(item.current!)))
+            operations.push({ ...op, expectedRevision: item.current!.revision, entity });
+        }
+      }
+      if (!operations.length)
+        throw new AppError(
+          'REBASE_NO_CHANGES',
+          '合并后没有需要应用的修改，可返回并拒绝原提案',
+          409,
+        );
+      const plan = this.plan(operations);
+      const source = this.request(id);
+      const request: ChangeRequest = {
+        id: parsed.requestId,
+        mode: 'batch',
+        status: 'pending',
+        source: 'web',
+        createdAt: new Date().toISOString(),
+        operations,
+        duplicates: findDuplicates(plan.state, plan.touched),
+        baseEntities: this.bases(plan),
+        rebasedFrom: id,
+      };
+      // Reconciliation never applies entity writes, even for a create-only remainder.
+      this.repository.saveRequest(request, fingerprint);
+      source.status = 'rejected';
+      source.supersededBy = request.id;
+      this.repository.saveRequest(source, this.repository.request(id)!.hash);
+      return request;
+    });
+  }
+  private bases(plan: Plan): Record<string, Entity> {
+    return Object.fromEntries(
+      plan.changes.flatMap((change) => (change.before ? [[change.id, change.before]] : [])),
+    );
+  }
+  private rebasePreview(id: string): RebasePreview {
+    const request = this.request(id);
+    if (request.status !== 'pending' || request.mode !== 'batch')
+      throw new AppError('REBASE_UNAVAILABLE', '只有待确认的普通变更提案可以重新合并', 409);
+    const blockers: RebasePreview['blockers'] = [];
+    const targets = request.operations.map((op) => this.repository.get(op.id!) ?? null);
+    const items: RebaseItem[] = request.operations.map((op, index) => {
+      const stored = targets[index];
+      const current = stored && !stored.deleted ? stored.entity : null;
+      if (op.action === 'create') {
+        if (stored)
+          blockers.push({ id: op.id!, message: '新增记录的编号已被使用，请手动重新创建提案。' });
+        return { operation: op, base: null, current, merged: op.entity, conflicts: [] };
+      }
+      const base =
+        request.baseEntities?.[op.id] ??
+        this.repository.entityRevision(op.id, op.expectedRevision) ??
+        null;
+      if (!current)
+        blockers.push({ id: op.id, message: '目标记录不存在或已删除，不能自动恢复，请手动处理。' });
+      if (!base || base.id !== op.id || base.revision !== op.expectedRevision)
+        blockers.push({
+          id: op.id,
+          message: '无法恢复提案的原始基准，不能安全判断修改，请根据当前记录手动提出变更。',
+        });
+      if (!current || !base) return { operation: op, base, current, merged: null, conflicts: [] };
+      if (op.action === 'delete')
+        return {
+          operation: op,
+          base,
+          current,
+          merged: null,
+          conflicts: current.revision !== base.revision ? ['$delete'] : [],
+        };
+      return { operation: op, base, current, ...mergeFields(base, current, op.entity) };
+    });
+    return { requestId: id, token: hash({ request, targets, items }), items, blockers };
   }
   requestUndo(input: unknown): ChangeRequest {
     const parsed = undoSchema.parse(input),
