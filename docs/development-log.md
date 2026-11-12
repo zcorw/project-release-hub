@@ -137,3 +137,15 @@ Validation: aggregate checks passed formatting, strict TypeScript, all 115 tests
 Review: PASS after inspecting secret handling, transaction boundaries, database targeting, TTY restoration and Docker packaging. Documentation includes the host/container commands and the image-version requirement. No source commit/push, image publication or live VPS operation was requested or performed.
 
 After verification, the user explicitly included the administrator initialization script, its tests and operator documentation in the authorized source commit/push. Delivery uses a separate Conventional Commit on the existing working branch. No image publication or live VPS operation is included.
+
+## Step 16: Reuse the generated Zhixu icon as the favicon
+
+Date: 2026-11-12. Confirmed request: use the selected ChatGPT plugin icon as the website icon. Implementation defaults recorded before changes: reuse assets/branding/zhixu-plugin-icon.png without altering its artwork, reference it from the HTML favicon link so Vite includes a fingerprinted asset, and allow only that PNG through the Docker build context. Existing unrelated work remains outside this change.
+
+Result: index.html now declares the selected PNG as the favicon. Vite emits a fingerprinted PNG and rewrites the production link; the Docker build allowlist includes the original image without admitting its generation prompt or unrelated assets.
+
+Validation: npm run check passed formatting, strict TypeScript, all 115 tests and production build. The initial sandboxed run failed on local HTTP connections with EACCES; the unrestricted rerun passed. All six existing isolated Chrome flows passed. A separate one-off Chrome check used an in-memory database and temporary local development/production servers: both pages returned the expected title and an image/png favicon with HTTP 200, the browser decoded it as 1254 x 1254, and its bytes matched the original artwork. The production URL contains the generated asset fingerprint. Final formatting and diff checks passed. Docker image build/container smoke were not rerun for this asset integration.
+
+Review: PASS for the HTML reference, production asset and Docker allowlist. No persistent user data, source commit/push or deployment was involved.
+
+After verification, the user authorized committing and pushing the favicon integration and generated branding assets to the existing remote on the current working branch. This is separate from the administrator initialization commit; no merge, image publication or deployment is included.

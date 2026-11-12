@@ -118,3 +118,11 @@ Execute T001 through T007 in order, reviewing one task at a time. T005 and T006 
       Modules: scripts, package.json, Docker build allowlist, tests and account/operator docs.
       Verify: Interactive/stdin input, validation, existing-account and rollback guards, live status/login, packaging and disposable container execution.
       Publication: Source commit/push authorized after verification; no image publication or live VPS operation requested.
+
+## Website favicon
+
+- [x] T015 [P2] Use the generated Zhixu plugin icon as the website favicon
+      Goal: Reuse the selected PNG in browser tabs during development and in production builds.
+      Modules: index.html, assets/branding, Docker build allowlist and implementation log.
+      Verify: Aggregate checks, existing Chrome flows and real browser loading of the built favicon.
+      Publication: Source commit/push authorized after verification; no deployment requested.

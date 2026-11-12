@@ -11,6 +11,9 @@
 !shared/**
 !web/
 !web/**
+!assets/
+!assets/branding/
+!assets/branding/zhixu-plugin-icon.png
 !scripts/
 !scripts/backup.ts
 !scripts/init-admin.ts

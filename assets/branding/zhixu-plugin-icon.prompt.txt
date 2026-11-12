@@ -1,0 +1,11 @@
+Generator: built-in ImageGen
+Background: opaque
+
+Use case: logo-brand.
+Asset type: A single upload-ready square app icon for the ChatGPT plugin 'Zhixu / 知序', a personal workspace for organizing software projects, feature plans, tasks, versions and releases.
+Primary request: Design one distinctive, polished brand symbol expressing orderly progress. Create a bold abstract Z-shaped modular ribbon built from three precisely aligned, generously rounded segments, subtly suggesting stacked project cards joined into one continuous path. Use clean negative space and a restrained small mint-green terminal block as the single accent, suggesting the next milestone. The symbol should feel intentional, balanced and memorable rather than like a generic checklist.
+Style: Refined contemporary software identity, crisp flat vector-like rendering, precise geometry, very minimal. Strong silhouette readable at 32 pixels.
+Color palette: deep midnight indigo full-bleed background, warm off-white primary symbol, one soft mint accent. Solid colors.
+Composition: 1:1 square, preferably 1024 by 1024. One large optically centered symbol with generous consistent safe margins around it, approximately 65 percent of canvas width. Background fills the entire square; do not draw an outer rounded square or border because the host will crop the icon.
+Text: none. The shape may evoke the letter Z but no wordmarks, Chinese characters, captions or slogans.
+Avoid: multiple alternatives, logo sheets, device mockups, surrounding interface, shadows, 3D, gradients, photographic texture, tiny details, thin lines, small decorative dots, generic check marks, rockets, OpenAI knot imagery, watermarks. Output only the finished standalone icon.
