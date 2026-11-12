@@ -66,6 +66,7 @@ class FakeUpdater(module.Updater):
                 self.container_id = "new-container"
                 self.health = "unhealthy" if self.fail == "health" else "healthy"
                 self.running = True
+                self.existing_volume = True
                 self.active_environment = {key: value for key, value in self.config["services"]["app"]["environment"].items() if value is not None}
                 return ""
         if args[:3] == ["docker", "context", "inspect"]:
@@ -369,6 +370,203 @@ class UpdateTests(unittest.TestCase):
             pass
 
 
+class RetryTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.updater = FakeUpdater(Path(self.temp.name))
+
+    def pending(self, failure="health", first_install=False):
+        if first_install:
+            self.updater.current_id = None
+            self.updater.existing_volume = False
+        else:
+            module.atomic_json(self.updater.latest, {"imageId": OLD})
+        self.updater.fail = failure
+        with self.assertRaises(module.UpdateError):
+            self.updater.update(registry_image=DIGEST)
+        self.updater.fail = None
+        self.updater.calls.clear()
+        return json.loads(self.updater.pending.read_text())
+
+    def assert_no_start(self):
+        self.assertFalse(any("up" in call for call in self.updater.calls))
+
+    def test_retry_applies_repaired_environment_and_rewrites_stale_overlay(self):
+        original = self.pending()
+        module.atomic_json(self.updater.overlay, {"services": {"app": {"image": OLD}}})
+        token = "fixture-repaired-token-" * 3
+        self.updater.config["services"]["app"]["environment"]["HUB_MCP_TOKEN"] = token
+        retried = self.updater.update(retry=True)
+        self.assertEqual(self.updater.active_environment["HUB_MCP_TOKEN"], token)
+        self.assertEqual(json.loads(self.updater.overlay.read_text())["services"]["app"]["image"], NEW)
+        self.assertEqual(retried["attemptId"], original["attemptId"])
+        self.assertEqual(retried["backupPath"], original["backupPath"])
+        self.assertEqual(retried["previousImageId"], OLD)
+        self.assertEqual(retried["registryDigest"], DIGEST)
+        self.assertTrue(Path(retried["retryBackupPath"]).is_file())
+        self.assertNotEqual(retried["retryBackupPath"], retried["backupPath"])
+        self.assertEqual(retried["retryCount"], 1)
+        self.assertFalse(self.updater.pending.exists())
+        self.assertFalse(any(call[:2] in (["docker", "build"], ["docker", "pull"]) for call in self.updater.calls))
+        for path in (self.updater.latest, self.updater.overlay):
+            self.assertNotIn(token, path.read_text())
+
+    def test_unhealthy_retry_keeps_journal_backups_and_previous_success(self):
+        original = self.pending()
+        self.updater.fail = "health"
+        with self.assertRaisesRegex(module.UpdateError, "health check"):
+            self.updater.update(retry=True)
+        pending = json.loads(self.updater.pending.read_text())
+        self.assertEqual(pending["retryCount"], 1)
+        self.assertEqual(pending["backupPath"], original["backupPath"])
+        self.assertTrue(Path(pending["retryBackupPath"]).is_file())
+        self.assertEqual(json.loads(self.updater.latest.read_text()), {"imageId": OLD})
+        self.updater.fail = None
+        self.assertEqual(self.updater.update(retry=True)["retryCount"], 2)
+
+    def test_stopped_candidate_uses_retained_backup_without_exec(self):
+        original = self.pending()
+        self.updater.running = False
+        retried = self.updater.update(retry=True)
+        self.assertEqual(retried["backupPath"], original["backupPath"])
+        self.assertFalse(any(call[:2] == ["docker", "exec"] for call in self.updater.calls))
+
+    def test_missing_candidate_reuses_existing_volume_and_retained_backup(self):
+        original = self.pending()
+        self.updater.current_id = None
+        retried = self.updater.update(retry=True)
+        self.assertEqual(retried["imageId"], NEW)
+        self.assertEqual(retried["backupPath"], original["backupPath"])
+        self.assertEqual(retried["volume"], "zhixu_zhixu-data")
+
+    def test_retry_after_start_failure_accepts_recorded_predecessor(self):
+        original = self.pending(failure="start")
+        self.assertEqual(self.updater.current_id, OLD)
+        retried = self.updater.update(retry=True)
+        self.assertEqual(retried["imageId"], NEW)
+        self.assertEqual(retried["backupPath"], original["backupPath"])
+
+    def test_first_install_retry_allows_stopped_candidate_without_prior_backup(self):
+        self.pending(first_install=True)
+        self.updater.running = False
+        retried = self.updater.update(retry=True)
+        self.assertIsNone(retried["backupPath"])
+        self.assertIsNone(retried["previousImageId"])
+        self.assertEqual(retried["imageId"], NEW)
+
+    def test_first_install_retry_can_create_container_after_start_failed(self):
+        self.pending(failure="start", first_install=True)
+        self.assertIsNone(self.updater.current_id)
+        self.assertFalse(self.updater.existing_volume)
+        self.assertEqual(self.updater.update(retry=True)["imageId"], NEW)
+
+    def test_retry_start_failure_retains_retry_journal_and_success_record(self):
+        original = self.pending()
+        self.updater.fail = "start"
+        with self.assertRaises(module.UpdateError):
+            self.updater.update(retry=True)
+        retried = json.loads(self.updater.pending.read_text())
+        self.assertEqual(retried["retryCount"], 1)
+        self.assertEqual(retried["backupPath"], original["backupPath"])
+        self.assertTrue(Path(retried["retryBackupPath"]).is_file())
+        self.assertEqual(json.loads(self.updater.latest.read_text()), {"imageId": OLD})
+
+    def test_retry_without_journal_is_rejected(self):
+        with self.assertRaisesRegex(module.UpdateError, "No interrupted"):
+            self.updater.update(retry=True)
+        self.assert_no_start()
+
+    def test_retry_rejects_missing_backup_or_data_volume(self):
+        original = self.pending()
+        self.updater.existing_volume = False
+        with self.assertRaisesRegex(module.UpdateError, "volume is missing"):
+            self.updater.update(retry=True)
+        self.updater.existing_volume = True
+        Path(original["backupPath"]).unlink()
+        with self.assertRaisesRegex(module.UpdateError, "retained backup"):
+            self.updater.update(retry=True)
+        self.assert_no_start()
+
+    def test_retry_rejects_unrelated_current_image(self):
+        self.pending()
+        self.updater.current_id = "sha256:" + "e" * 64
+        with self.assertRaisesRegex(module.UpdateError, "neither the pending"):
+            self.updater.update(retry=True)
+        self.assert_no_start()
+
+    def test_retry_validates_journal_volume_and_local_image_identity(self):
+        original = self.pending()
+        for change, message in (({"volume": "other-volume"}, "different data volume"), ({"imageId": "latest"}, "exact local sha256")):
+            with self.subTest(change=change):
+                module.atomic_json(self.updater.pending, {**original, **change})
+                with self.assertRaisesRegex(module.UpdateError, message):
+                    self.updater.update(retry=True)
+        module.atomic_json(self.updater.pending, original)
+        self.updater.candidate["Id"] = "sha256:" + "e" * 64
+        with self.assertRaisesRegex(module.UpdateError, "does not match"):
+            self.updater.update(retry=True)
+        self.assert_no_start()
+
+    def test_retry_backup_failure_keeps_original_journal_and_container(self):
+        original = self.pending()
+        self.updater.fail = "exec"
+        with self.assertRaises(module.UpdateError):
+            self.updater.update(retry=True)
+        self.assertEqual(json.loads(self.updater.pending.read_text()), original)
+        self.assert_no_start()
+
+    def test_retry_rechecks_configuration_before_replacement(self):
+        original = self.pending()
+        real_run = self.updater.run
+
+        def changing(args, **kwargs):
+            result = real_run(args, **kwargs)
+            if args[:2] == ["docker", "cp"]:
+                self.updater.config["services"]["app"]["environment"]["HUB_MCP_TOKEN"] = "changed-fixture-token-" * 3
+            return result
+
+        with patch.object(self.updater, "run", side_effect=changing):
+            with self.assertRaisesRegex(module.UpdateError, "settings changed"):
+                self.updater.update(retry=True)
+        self.assertEqual(json.loads(self.updater.pending.read_text()), original)
+        self.assert_no_start()
+
+    def test_retry_source_and_journal_changes_fail_before_replacement(self):
+        original = self.pending()
+        self.updater.dirty = True
+        with self.assertRaisesRegex(module.UpdateError, "source changes"):
+            self.updater.update(retry=True)
+        self.updater.dirty = False
+        real_run = self.updater.run
+
+        def changing(args, **kwargs):
+            result = real_run(args, **kwargs)
+            if args[:2] == ["docker", "cp"]:
+                module.atomic_json(self.updater.pending, {**original, "attemptId": "external-change"})
+            return result
+
+        with patch.object(self.updater, "run", side_effect=changing):
+            with self.assertRaisesRegex(module.UpdateError, "attempt changed"):
+                self.updater.update(retry=True)
+        self.assert_no_start()
+
+    def test_retry_refuses_container_identity_changes_during_backup(self):
+        self.pending()
+        real_run = self.updater.run
+
+        def changing(args, **kwargs):
+            result = real_run(args, **kwargs)
+            if args[:2] == ["docker", "cp"]:
+                self.updater.container_id = "externally-replaced-container"
+            return result
+
+        with patch.object(self.updater, "run", side_effect=changing):
+            with self.assertRaisesRegex(module.UpdateError, "Container changed"):
+                self.updater.update(retry=True)
+        self.assert_no_start()
+
+
 @unittest.skipUnless(shutil.which("docker"), "Real Compose resolution requires the Docker CLI, not a running engine")
 class ComposeEnvironmentTests(unittest.TestCase):
     def setUp(self):
@@ -422,7 +620,6 @@ class ComposeEnvironmentTests(unittest.TestCase):
         self.assertNotIn("NODE_OPTIONS", environment)
         self.assertEqual({key: environment[key] for key in module.FIXED_ENVIRONMENT}, module.FIXED_ENVIRONMENT)
         self.assertEqual(app["volumes"][0]["target"], "/app/data")
-
 
 @unittest.skipUnless(os.environ.get("ZHIXU_TEST_IMAGE") and shutil.which("docker"), "Set ZHIXU_TEST_IMAGE to a local test image for isolated container creation")
 class ComposeContainerEnvironmentTests(unittest.TestCase):

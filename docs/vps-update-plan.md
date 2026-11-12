@@ -31,3 +31,15 @@ Implementation decisions recorded before changes:
 - Preserve existing application configuration validation, OAuth consent/scopes, local-token/remote-OAuth exclusivity and web-only confirmation. Remote configuration uses the already implemented HTTPS/proxy validation; privately initialize the owner before enabling OAuth.
 - Capture resolved configuration in memory, recheck it before replacement and verify effective container configuration without writing secrets into records, overlays, logs or command arguments. Keep .env outside Git and build inputs.
 - Verify real Compose resolution with disposable fixture files, updater failure/recovery regressions, application checks, browser account/OAuth flows and container checks when the local engine is available. No real operator .env or live VPS is needed.
+
+## Failed-update retry follow-up (2026-11-12)
+
+The operator reported that a corrected .env could not be applied through the updater while an unhealthy pending attempt existed. The existing --recover only verifies a container, and a normal update correctly refuses to discard an unfinished journal. Recommending manual edits to selected-image.json leaves the recovery workflow incomplete.
+
+Decisions recorded before implementation:
+
+- Add an explicit --retry mode under the existing host-wide lock. Read the candidate image ID from pending-update.json, validate its local image and volume, then recreate app with the current reviewed .env. Rewrite the image overlay automatically from that record; do not select a different image, build, pull or restore SQLite.
+- Accept only the pending candidate or its recorded predecessor as the existing container. Reject unrelated container/image changes, missing persisted data volumes and missing required backups. A first-install retry may proceed without a preexisting backup only when its journal has no predecessor or prior successful installation.
+- Back up a running container before retry. Preserve the original pre-update backupPath; track any fresh retry backup separately. A stopped/missing container requires a retained backup except for a genuine first-install journal.
+- Recheck source, configuration and container identity before replacement. Persist retry metadata before recreating; only matching image, environment, volume and healthy status can advance latest-image.json. Failure keeps the journal and backups.
+- Keep --recover as verification only and retain the guard on starting an unrelated update while pending. Document --retry as the supported configuration-repair path. Implementation and isolated tests are in scope; no live VPS operation or remote publication is performed by this change.

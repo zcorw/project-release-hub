@@ -77,6 +77,8 @@ After updating a clean, committed checkout on an independently prepared Linux VP
 
 The updater reads the project-root .env for both local builds and --image digest pulls. Keep the backend port loopback-only; optional HTTPS/OAuth uses an independently configured reverse proxy. This source change does not operate a VPS or provision public access. See the [VPS update and recovery guide](docs/vps-update.md) for environment setup, prerequisites, immutable digest pulls, failures, backups, and explicit image-only rollback.
 
+After a failed update caused by incorrect environment settings, fix .env and run `bash scripts/update-vps.sh --retry`. It recreates the image recorded in the pending journal with the corrected settings, repairs the image-selection file automatically and records success only after health verification. `--recover` only verifies an already healthy candidate. Keep deployment state files intact; do not edit them to bypass an unfinished attempt.
+
 ## MCP and ChatGPT
 
 The implemented endpoint is http://127.0.0.1:4310/mcp with an Authorization: Bearer token header. It exposes read tools, idempotent batch submission, and request-status lookup. It intentionally exposes no approval tool.

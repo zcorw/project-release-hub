@@ -243,23 +243,83 @@ class Updater:
             "pendingAttempt": json.loads(self.pending.read_text(encoding="utf-8")) if self.pending.exists() else None,
         }
 
-    def update(self, registry_image=None, rollback=None, recover=False):
-        configuration = self.validate_config()
-        if recover:
-            if not self.pending.exists():
-                raise UpdateError("No interrupted attempt exists to verify.")
-            record = json.loads(self.pending.read_text(encoding="utf-8"))
-            if record.get("volume") != self.volume:
-                raise UpdateError("The interrupted attempt uses a different data volume.")
-            self.healthy(record["imageId"])
-            return self.finish(record)
-        if self.pending.exists() and not rollback:
-            raise UpdateError("An unfinished update exists. Use --status, then --recover or an explicit --rollback IMAGE_ID after reviewing the database.")
+    def clean_checkout(self):
         checkout = self.run(["git", "rev-parse", "HEAD"])
         if not re.fullmatch(r"[a-f0-9]{40,64}", checkout):
             raise UpdateError("Expected a committed Git checkout.")
         if self.run(["git", "status", "--porcelain", "--untracked-files=normal"]):
             raise UpdateError("Commit or remove source changes before updating; the build must match the recorded checkout.")
+        return checkout
+
+    def recheck_preparation(self, checkout, configuration, old):
+        if self.run(["git", "rev-parse", "HEAD"]) != checkout or self.run(["git", "status", "--porcelain", "--untracked-files=normal"]):
+            raise UpdateError("Source changed during preparation; refusing replacement.")
+        if self.validate_config() != configuration:
+            raise UpdateError("Compose or environment settings changed during preparation; refusing replacement.")
+        actual = self.current()
+        if (actual or {}).get("Id") != (old or {}).get("Id") or (actual or {}).get("Image") != (old or {}).get("Image"):
+            raise UpdateError("Container changed during preparation; refusing replacement.")
+
+    def pending_record(self):
+        if not self.pending.exists():
+            raise UpdateError("No interrupted attempt exists; use a normal update for a new image.")
+        record = json.loads(self.pending.read_text(encoding="utf-8"))
+        if not isinstance(record, dict) or record.get("schemaVersion") != 1:
+            raise UpdateError("Unsupported pending attempt record.")
+        if record.get("volume") != self.volume:
+            raise UpdateError("The interrupted attempt uses a different data volume.")
+        if not isinstance(record.get("imageId"), str) or not IMAGE_ID.fullmatch(record["imageId"]):
+            raise UpdateError("The pending attempt requires an exact local sha256 image ID.")
+        return record
+
+    def retry_pending(self, configuration):
+        record = self.pending_record()
+        checkout = self.clean_checkout()
+        previous = record.get("previousImageId")
+        if previous is not None and (not isinstance(previous, str) or not IMAGE_ID.fullmatch(previous)):
+            raise UpdateError("The pending predecessor image ID is invalid.")
+        old = self.current()
+        if old and old.get("Image") not in (record["imageId"], previous):
+            raise UpdateError("Current container is neither the pending candidate nor its recorded predecessor.")
+        first_install = previous is None and record.get("previousSuccessful") is None and not self.latest.exists()
+        retained_backup = any(
+            isinstance(record.get(key), str) and Path(record[key]).is_file() and Path(record[key]).stat().st_size > 0
+            for key in ("backupPath", "retryBackupPath")
+        )
+        if not first_install and not retained_backup:
+            raise UpdateError("Retry requires a retained backup; preserve/review the database before recovery.")
+        if not first_install and not self.volume_exists():
+            raise UpdateError("The pending data volume is missing; refusing to create an empty replacement.")
+        if self.image(record["imageId"])["Id"] != record["imageId"]:
+            raise UpdateError("The local image does not match the pending candidate.")
+        retry_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-retry-" + uuid.uuid4().hex[:12]
+        retry_backup = record.get("retryBackupPath")
+        if old and old.get("State", {}).get("Running"):
+            retry_backup = self.backup(old, retry_id)
+        self.recheck_preparation(checkout, configuration, old)
+        if not first_install and not self.volume_exists():
+            raise UpdateError("The pending data volume disappeared during preparation.")
+        if json.loads(self.pending.read_text(encoding="utf-8")) != record:
+            raise UpdateError("The pending attempt changed during preparation; refusing replacement.")
+        retried = {**record, "retryCount": int(record.get("retryCount", 0)) + 1,
+                   "retriedAt": now(), "retryCheckoutCommit": checkout, "retryBackupPath": retry_backup}
+        atomic_json(self.pending, retried)
+        # Regenerate any stale overlay from the journal, using the same candidate.
+        self.start(record["imageId"])
+        self.healthy(record["imageId"])
+        return self.finish(retried)
+
+    def update(self, registry_image=None, rollback=None, recover=False, retry=False):
+        configuration = self.validate_config()
+        if retry:
+            return self.retry_pending(configuration)
+        if recover:
+            record = self.pending_record()
+            self.healthy(record["imageId"])
+            return self.finish(record)
+        if self.pending.exists() and not rollback:
+            raise UpdateError("An unfinished update exists. Use --status, --retry after fixing .env, --recover to verify, or an explicit --rollback IMAGE_ID after reviewing the database.")
+        checkout = self.clean_checkout()
         old = self.current()
         # A rollback may follow a failed startup. Preserve the previous backup in the journal.
         prior_attempt = json.loads(self.pending.read_text(encoding="utf-8")) if self.pending.exists() else None
@@ -291,14 +351,8 @@ class Updater:
                 backup = prior_attempt["backupPath"]
             else:
                 backup = self.backup(old, run_id)
-        if self.run(["git", "rev-parse", "HEAD"]) != checkout or self.run(["git", "status", "--porcelain", "--untracked-files=normal"]):
-            raise UpdateError("Source changed during preparation; refusing replacement.")
-        if self.validate_config() != configuration:
-            raise UpdateError("Compose or environment settings changed during preparation; refusing replacement.")
         # Recheck before replacement; never overwrite a concurrent external container change.
-        actual = self.current()
-        if (actual or {}).get("Id") != (old or {}).get("Id") or (actual or {}).get("Image") != (old or {}).get("Image"):
-            raise UpdateError("Container changed during preparation; refusing replacement.")
+        self.recheck_preparation(checkout, configuration, old)
         record = {
             "schemaVersion": 1, "operation": mode, "attemptId": run_id,
             "startedAt": now(), "imageId": candidate["Id"],
@@ -333,6 +387,7 @@ def main():
     modes.add_argument("--rollback", metavar="IMAGE_ID", help="Explicit image-only rollback; never restores SQLite")
     modes.add_argument("--status", action="store_true", help="Compare actual container with saved successful/pending state")
     modes.add_argument("--recover", action="store_true", help="Verify and record a healthy interrupted candidate")
+    modes.add_argument("--retry", action="store_true", help="Recreate the pending candidate using the corrected .env; no build or pull")
     parser.add_argument("--timeout", type=int, default=120, help="Health wait in seconds (1-1800)")
     args = parser.parse_args()
     if not 1 <= args.timeout <= 1800:
@@ -345,11 +400,11 @@ def main():
     signal.signal(signal.SIGINT, interrupted)
     try:
         with update_lock(updater.state):
-            result = updater.status() if args.status else updater.update(args.image, args.rollback, args.recover)
+            result = updater.status() if args.status else updater.update(args.image, args.rollback, args.recover, args.retry)
             print(json.dumps(result, indent=2))
     except (UpdateError, OSError, ValueError, KeyError) as error:
         print(f"Update failed: {error}", file=sys.stderr)
-        print("No failed candidate is recorded as successful. Inspect --status; review the backup and schema compatibility before an explicit rollback. No volumes/images were deleted.", file=sys.stderr)
+        print("No failed candidate is recorded as successful. Inspect --status and container logs. After fixing configuration, use --retry to recreate or --recover to verify. Review backups/schema compatibility before --rollback. No volumes/images were deleted.", file=sys.stderr)
         return 1
     return 0
 

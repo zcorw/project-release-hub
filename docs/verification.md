@@ -91,3 +91,14 @@ Date: 2026-11-11. This supersedes the earlier claim that the updater rejects all
 - Bash syntax and final formatting/diff checks passed. Windows sandbox restrictions on atomic replacement in its temporary directory were avoided by using a workspace-owned disposable test directory or the unrestricted local test process.
 
 Not performed: a live VPS install/update, real GHCR pull/authentication/publication, public TLS/Nginx validation or ChatGPT onboarding. Source commit/push was separately authorized after this verification; remote delivery results must be checked separately.
+
+## Pending-update retry follow-up
+
+Date: 2026-11-12. --retry now recreates the journal's candidate with corrected configuration and regenerates a stale/missing selected-image.json. --recover still only verifies a candidate that is already healthy.
+
+- Updater suite: 48 tests total. Windows with the local test image passed 47 and skipped Linux flock. A networkless Linux container with the repository mounted read-only passed 43 including flock and skipped the five Docker CLI/container checks. Those environments jointly exercised all cases.
+- Sixteen new retry regressions passed: corrected settings, stale overlay repair, retained original/fresh backups, healthy/unhealthy/start-failure retries, first-install retries, stopped/missing containers, missing backups/volumes, unexpected image identities, backup failure and concurrent source/configuration/journal/container changes. Normal update/recovery/rollback regressions still passed.
+- npm run check passed formatting, strict TypeScript, 97 application tests and production build. All six isolated Chrome scenarios passed. CLI help, Bash entry-point syntax and final diff checks passed.
+- Real Compose/container environment checks used the existing unchanged application image and UUID-named disposable resources, which were removed after inspection. Actual retry lifecycle failures are tested with the fake Docker adapter; no real VPS recovery or production data was exercised.
+
+The user subsequently authorized this verified retry change as its own source commit and a normal shared-branch push. No image publication or live VPS operation is included; remote delivery results are verified separately.

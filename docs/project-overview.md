@@ -37,3 +37,5 @@ The user requested native account completion and MCP OAuth without nest-account,
 ## Compose and VPS environment follow-up
 
 The user explicitly requested that Compose and the update script use the project-root .env. Both now forward the documented GitHub/MCP/OAuth settings, with shell precedence and fixed container storage/port/bind settings. The updater rechecks resolved configuration before replacement and verifies the running container environment without including secrets in its state or output. This supersedes the original blanket environment-override restriction; it does not provision a live VPS, proxy, domain or ChatGPT connection.
+
+The subsequent failed-update follow-up adds --retry: after correcting .env, the updater recreates the pending candidate and repairs the selected-image overlay itself. It preserves the original backup and successful record until health verification completes. --recover remains verification-only; manual edits to deployment journals are unnecessary.
