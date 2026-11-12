@@ -113,3 +113,14 @@ Date: 2026-11-12. PORT is now interpolated into the Compose application environm
 - npm run check passed formatting, strict TypeScript, all 97 application tests and production build. All six isolated Chrome flows passed; final formatting/diff checks also passed.
 
 No real .env, VPS, proxy or registry was changed. The user subsequently authorized separate commits for retry and port changes on one working branch and a normal push. Remote delivery results are verified separately.
+
+## Container administrator initialization
+
+Date: 2026-11-12. Added npm run init-admin for local operator initialization in the running application container. The decision record is admin-initialization-plan.md.
+
+- npm run check passed formatting, strict TypeScript, all 115 tests across 11 files and production build. The 18 new cases cover password validation/confirmation, shared hashing, preserved business data, existing-owner/race guards, audit rollback, CLI input/no-echo errors, hidden terminal editing, Ctrl-C/EOF and raw-mode restoration.
+- An integration test initialized a separate connection to a live HTTPS-mode app's database through the real CLI subprocess. The app reported configured and accepted login without restart, while remote web setup remained forbidden. All six existing isolated Chrome flows also passed.
+- A fresh Linux runtime image built successfully with the npm alias, initialization script and terminal helper. Its smoke test passed as UID 1000 with a read-only root filesystem and disposable data volume: a real Linux pseudo-terminal tested hidden confirmation, Ctrl-C, mismatch and success against an independent temporary database; stdin initialized the running app's database; repeated initialization was refused; login worked immediately. Default/custom-port health, UI, Host checks, disabled local MCP and persistence/restart isolation also passed. Resources were removed.
+- The local Node 22.12 smoke used the previously documented keep-alive wrapper with five-second fetch timeouts. A sandboxed HTTP attempt was denied by local network restrictions; the authorized unrestricted test process passed. No real operator database or .env was read.
+
+No source commit/push, image publication, live VPS operation, proxy configuration or ChatGPT connection was performed. Old published images do not acquire the new script from a source-only pull; an image containing this change is required.

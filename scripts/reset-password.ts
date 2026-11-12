@@ -6,7 +6,7 @@ const password = passwordSchema.parse(process.env.HUB_RESET_PASSWORD);
 const repository = new Repository(resolve(process.env.HUB_DATA_DIR ?? 'data', 'hub.db'));
 if (!repository.account()) {
   repository.close();
-  throw new Error('No account exists. Use the first-run setup page.');
+  throw new Error('No account exists. Run npm run init-admin first.');
 }
 const { salt, hash } = hashPassword(password);
 repository.setPassword(salt, hash);

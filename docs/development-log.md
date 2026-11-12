@@ -125,3 +125,27 @@ Validation: the 52-case updater/configuration suite passed 51 tests on Windows a
 Review: PASS. Neither user .env contents nor live VPS data were accessed. The retry and configurable-port changes remain local source work; no commit/push, registry publication or live deployment was performed.
 
 After verification, the user authorized a separate Conventional Commit for the port change, following the retry commit on the same working branch, and a normal push to the existing remote. Remote delivery results are checked separately; no merge into the default branch, registry publication or VPS operation is included.
+
+## Step 15: Initialize the administrator inside the container
+
+Date: 2026-11-12. The user requested a short script for the VPS Docker container instead of a long inline initialization command. Scope and implementation decisions were recorded in admin-initialization-plan.md before generating code.
+
+Result: npm run init-admin uses the current HUB_DATA_DIR/hub.db and requires an existing application database. Default terminal input hides and confirms the password; explicit --password-stdin supports controlled automation without password arguments/environment variables. Shared validation and scrypt hashing are reused. Account insertion and the account_created event share a transaction; preflight and insertion guards refuse an existing owner, including a stale preflight read. Failures and cancellation leave the account absent; no secret is echoed. HTTPS/OAuth may already be enabled and remote web setup remains disabled. Refreshing the running app recognizes the account without restart. Docker's build allowlist includes both new files, and the forgotten-password tool points an absent owner to the new command.
+
+Validation: aggregate checks passed formatting, strict TypeScript, all 115 tests and production build; all six isolated Chrome flows passed. Eighteen new regressions verify validation/confirmation, hashing/audit, preserved records, existing-owner/race protection, audit rollback, real CLI subprocess use, missing database/help, non-TTY/stdin/error behavior and hidden/cancelled terminal input. A live HTTPS app accepted the CLI-created account without restart while refusing remote setup. A fresh Linux image passed non-root/read-only smoke, real pseudo-terminal cancellation/mismatch/hidden confirmation, stdin initialization, refusal to overwrite and immediate login, plus existing container startup/persistence checks. Temporary resources were removed; the local Node 22.12 test harness used its documented bounded-fetch keep-alive wrapper.
+
+Review: PASS after inspecting secret handling, transaction boundaries, database targeting, TTY restoration and Docker packaging. Documentation includes the host/container commands and the image-version requirement. No source commit/push, image publication or live VPS operation was requested or performed.
+
+After verification, the user explicitly included the administrator initialization script, its tests and operator documentation in the authorized source commit/push. Delivery uses a separate Conventional Commit on the existing working branch. No image publication or live VPS operation is included.
+
+## Step 16: Reuse the generated Zhixu icon as the favicon
+
+Date: 2026-11-12. Confirmed request: use the selected ChatGPT plugin icon as the website icon. Implementation defaults recorded before changes: reuse assets/branding/zhixu-plugin-icon.png without altering its artwork, reference it from the HTML favicon link so Vite includes a fingerprinted asset, and allow only that PNG through the Docker build context. Existing unrelated work remains outside this change.
+
+Result: index.html now declares the selected PNG as the favicon. Vite emits a fingerprinted PNG and rewrites the production link; the Docker build allowlist includes the original image without admitting its generation prompt or unrelated assets.
+
+Validation: npm run check passed formatting, strict TypeScript, all 115 tests and production build. The initial sandboxed run failed on local HTTP connections with EACCES; the unrestricted rerun passed. All six existing isolated Chrome flows passed. A separate one-off Chrome check used an in-memory database and temporary local development/production servers: both pages returned the expected title and an image/png favicon with HTTP 200, the browser decoded it as 1254 x 1254, and its bytes matched the original artwork. The production URL contains the generated asset fingerprint. Final formatting and diff checks passed. Docker image build/container smoke were not rerun for this asset integration.
+
+Review: PASS for the HTML reference, production asset and Docker allowlist. No persistent user data, source commit/push or deployment was involved.
+
+After verification, the user authorized committing and pushing the favicon integration and generated branding assets to the existing remote on the current working branch. This is separate from the administrator initialization commit; no merge, image publication or deployment is included.

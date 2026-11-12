@@ -37,6 +37,14 @@ npm run dev
 
 Open http://127.0.0.1:5173. The API runs on port 4310. On the first visit, choose an administrator password of at least 12 characters. There is no built-in account or default password.
 
+For a running VPS Docker container, initialize the administrator from the project directory:
+
+```bash
+docker compose -p zhixu -f compose.yml exec app npm run init-admin
+```
+
+Enter the password twice when prompted; input is hidden. Keep the interactive terminal (do not add -T). This uses the running container's database and also works with HTTPS/OAuth enabled. Refresh the web page and log in after success; no restart is needed. Existing accounts are never overwritten. See the [initialization guide](docs/account-oauth.md#initialize-the-first-administrator) for stdin automation and image requirements.
+
 ## Start the built app
 
 ```powershell

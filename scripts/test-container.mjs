@@ -1,18 +1,61 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { get as httpGet } from 'node:http';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const image = process.argv[2] ?? 'zhixu:ci';
 const name = 'zhixu-smoke-' + randomUUID();
 const volume = name + '-data';
 let volumeCreated = false;
-function docker(args, allowFailure = false) {
-  const result = spawnSync('docker', args, { encoding: 'utf8', timeout: 120000 });
+function docker(args, allowFailure = false, input) {
+  const result = spawnSync('docker', args, { encoding: 'utf8', timeout: 120000, input });
   if (!allowFailure && (result.error || result.status !== 0))
     throw new Error(result.error?.message ?? result.stderr ?? 'Docker command failed.');
   return result.stdout?.trim() ?? '';
+}
+async function terminalInitialize(steps, expectedStatus) {
+  const child = spawn('docker', [
+    'exec',
+    '-i',
+    '--env',
+    'HUB_DATA_DIR=/tmp/terminal-admin',
+    name,
+    'script',
+    '--quiet',
+    '--return',
+    '--command',
+    'npm run init-admin',
+    '/dev/null',
+  ]);
+  let output = '';
+  let next = 0;
+  const collect = (chunk) => {
+    output += chunk.toString();
+    if (next < steps.length && output.includes(steps[next].prompt)) {
+      child.stdin.write(steps[next].input);
+      next++;
+    }
+  };
+  child.stdout.on('data', collect);
+  child.stderr.on('data', collect);
+  const timer = setTimeout(() => child.kill(), 15000);
+  try {
+    const status = await new Promise((resolve, reject) => {
+      child.on('error', reject);
+      child.on('close', resolve);
+    });
+    assert.equal(status, expectedStatus);
+    assert.equal(next, steps.length);
+    for (const step of steps) {
+      if (step.input.length > 1) assert.ok(!output.includes(step.input.trim()));
+    }
+    return output;
+  } finally {
+    clearTimeout(timer);
+    child.stdin.destroy();
+    if (child.exitCode === null) child.kill();
+  }
 }
 async function start(port = 4310) {
   docker([
@@ -74,27 +117,78 @@ try {
   const status = await fetch(url + '/api/auth/status');
   const initial = await status.json();
   assert.equal(initial.configured, false);
+  // Exercise a real Linux pseudo-terminal against a separate disposable database.
+  docker([
+    'exec',
+    name,
+    'node',
+    '--import',
+    'tsx',
+    '--input-type=module',
+    '-e',
+    "import { Repository } from './server/infrastructure/database.ts'; new Repository('/tmp/terminal-admin/hub.db').close();",
+  ]);
+  const password = 'isolated-container-' + randomUUID();
+  assert.match(
+    await terminalInitialize([{ prompt: 'Administrator password', input: '\u0003' }], 1),
+    /cancelled/,
+  );
+  assert.match(
+    await terminalInitialize(
+      [
+        { prompt: 'Administrator password', input: password + '\n' },
+        { prompt: 'Confirm password', input: password + 'different\n' },
+      ],
+      1,
+    ),
+    /do not match/,
+  );
+  assert.match(
+    await terminalInitialize(
+      [
+        { prompt: 'Administrator password', input: password + '\n' },
+        { prompt: 'Confirm password', input: password + '\n' },
+      ],
+      0,
+    ),
+    /Administrator initialized/,
+  );
+  assert.equal((await (await fetch(url + '/api/auth/status')).json()).configured, false);
   const cookies = status.headers
     .getSetCookie()
     .map((cookie) => cookie.split(';')[0])
     .join('; ');
-  const setup = await fetch(url + '/api/auth/setup', {
+  const initialize = docker(
+    ['exec', '-i', name, 'npm', 'run', 'init-admin', '--', '--password-stdin'],
+    false,
+    password + '\n',
+  );
+  assert.match(initialize, /Administrator initialized/);
+  assert.ok(!initialize.includes(password));
+  assert.equal((await (await fetch(url + '/api/auth/status')).json()).configured, true);
+  const repeated = spawnSync('docker', ['exec', name, 'npm', 'run', 'init-admin'], {
+    encoding: 'utf8',
+    timeout: 120000,
+  });
+  assert.equal(repeated.status, 1);
+  assert.match(repeated.stderr, /already exists/);
+  const login = await fetch(url + '/api/auth/login', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Cookie: cookies,
       'X-CSRF-Token': initial.csrfToken,
     },
-    body: JSON.stringify({ password: 'isolated-container-' + randomUUID() }),
+    body: JSON.stringify({ password }),
   });
-  assert.equal(setup.status, 200);
+  assert.equal(login.status, 200);
   docker(['stop', name]);
   url = await start(4311);
   const restarted = await (await fetch(url + '/api/auth/status')).json();
   assert.equal(restarted.configured, true);
   assert.equal(restarted.authenticated, false);
   console.log(
-    'Container passed: non-root, UI, health on default/custom ports, Host guard, auth, disabled MCP, SQLite persistence, and restart isolation.',
+    'Container passed: non-root, UI, health on default/custom ports, Host guard, hidden terminal/stdin admin initialization, cancellation/mismatch/refusal, login without restart, disabled MCP, SQLite persistence, and restart isolation.',
   );
 } finally {
   docker(['rm', '--force', name], true);

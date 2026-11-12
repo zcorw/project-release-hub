@@ -62,7 +62,15 @@ The update sequence is:
 
 The app will be briefly unavailable during replacement. Valid persistent sessions survive when HUB_SESSION_SECRET stays stable; without it local users must sign in again. A local health check is evidence of startup health, not full application/schema compatibility or security approval.
 
-A genuine first install is allowed only when neither the app container nor the named volume exists. Set up the initial administrator password through loopback/tunnel access. If a volume exists but the container was removed with compose down, the updater refuses to skip backup. Recreate the **previously verified image** using its saved overlay first, check the app, then update. Do not remove the data volume to bypass this guard.
+A genuine first install is allowed only when neither the app container nor the named volume exists. After startup, initialize the first administrator from the project directory:
+
+```bash
+docker compose -p zhixu -f compose.yml exec app npm run init-admin
+```
+
+Enter a 12-128 character password twice; both entries are hidden. Keep the terminal enabled (no -T). The command uses the running container's database, refuses an existing account, and works even when HTTPS/OAuth is enabled. Refresh the page and log in after success; no restart is needed. Images predating the script must first be replaced with an image containing it. See [account initialization](account-oauth.md#initialize-the-first-administrator) for details and stdin automation.
+
+If a volume exists but the container was removed with compose down, the updater refuses to skip backup. Recreate the **previously verified image** using its saved overlay first, check the app, then update. Do not remove the data volume to bypass this guard.
 
 ## Read the image record
 
