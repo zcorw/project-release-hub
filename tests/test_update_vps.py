@@ -4,11 +4,14 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 import uuid
+from urllib.request import urlopen
 
 SPEC = importlib.util.spec_from_file_location("update_vps", Path(__file__).parents[1] / "scripts" / "update-vps.py")
 module = importlib.util.module_from_spec(SPEC)
@@ -33,10 +36,10 @@ class FakeUpdater(module.Updater):
         self.existing_volume = True
         self.mount = "zhixu_zhixu-data"
         self.candidate_id = NEW
-        self.active_environment = dict(module.FIXED_ENVIRONMENT)
+        self.active_environment = {"PORT": "4310", **module.FIXED_ENVIRONMENT}
         self.config = {
             "services": {"app": {
-                "environment": dict(module.FIXED_ENVIRONMENT),
+                "environment": dict(self.active_environment),
                 "ports": [{"host_ip": "127.0.0.1", "target": 4310, "published": "4310"}],
                 "read_only": True, "cap_drop": ["ALL"],
                 "security_opt": ["no-new-privileges:true"],
@@ -171,10 +174,32 @@ class UpdateTests(unittest.TestCase):
             with self.subTest(key=key):
                 environment.clear()
                 environment.update(module.FIXED_ENVIRONMENT)
+                environment["PORT"] = "4310"
                 environment[key] = value
                 with self.assertRaises(module.UpdateError):
                     self.updater.update()
                 self.assertFalse(self.started())
+
+    def test_custom_port_applies_to_app_mapping_and_status(self):
+        app = self.updater.config["services"]["app"]
+        app["environment"]["PORT"] = "54321"
+        app["ports"][0].update({"target": 54321, "published": "54321"})
+        self.updater.update(registry_image=DIGEST)
+        self.assertEqual(self.updater.active_environment["PORT"], "54321")
+        self.assertEqual(self.updater.status()["configuredPort"], 54321)
+        self.assertTrue(self.updater.status()["environmentMatches"])
+
+    def test_invalid_ports_and_mismatched_mapping_are_rejected(self):
+        app = self.updater.config["services"]["app"]
+        for port in (None, "", "1023", "65536", "4310.5", "abc", "-1"):
+            with self.subTest(port=port):
+                app["environment"]["PORT"] = port
+                with self.assertRaisesRegex(module.UpdateError, "PORT must be"):
+                    self.updater.update()
+        app["environment"]["PORT"] = "54321"
+        with self.assertRaisesRegex(module.UpdateError, "both match PORT"):
+            self.updater.update()
+        self.assertFalse(self.started())
 
     def test_secrets_reach_container_but_not_commands_records_or_status(self):
         secret = "fixture-only-secret-" * 4
@@ -397,8 +422,11 @@ class RetryTests(unittest.TestCase):
         module.atomic_json(self.updater.overlay, {"services": {"app": {"image": OLD}}})
         token = "fixture-repaired-token-" * 3
         self.updater.config["services"]["app"]["environment"]["HUB_MCP_TOKEN"] = token
+        self.updater.config["services"]["app"]["environment"]["PORT"] = "54321"
+        self.updater.config["services"]["app"]["ports"][0].update({"target": 54321, "published": "54321"})
         retried = self.updater.update(retry=True)
         self.assertEqual(self.updater.active_environment["HUB_MCP_TOKEN"], token)
+        self.assertEqual(self.updater.active_environment["PORT"], "54321")
         self.assertEqual(json.loads(self.updater.overlay.read_text())["services"]["app"]["image"], NEW)
         self.assertEqual(retried["attemptId"], original["attemptId"])
         self.assertEqual(retried["backupPath"], original["backupPath"])
@@ -579,7 +607,7 @@ class ComposeEnvironmentTests(unittest.TestCase):
         env_file = self.root / ".env"
         if contents is not None:
             env_file.write_text(contents, encoding="utf-8")
-        environment = {key: value for key, value in os.environ.items() if not key.startswith("COMPOSE_") and key not in module.OPTIONAL_ENVIRONMENT}
+        environment = {key: value for key, value in os.environ.items() if not key.startswith("COMPOSE_") and key not in module.RUNTIME_ENVIRONMENT_KEYS}
         environment.update(shell or {})
         result = subprocess.run([
             "docker", "compose", "--project-directory", str(self.root), "--project-name", "zhixu",
@@ -595,6 +623,8 @@ class ComposeEnvironmentTests(unittest.TestCase):
                 self.assertEqual({key: app["environment"][key] for key in module.FIXED_ENVIRONMENT}, module.FIXED_ENVIRONMENT)
                 self.assertTrue(all(app["environment"].get(key) is None for key in module.OPTIONAL_ENVIRONMENT))
                 self.assertEqual(app["ports"][0]["host_ip"], "127.0.0.1")
+                self.assertEqual(app["environment"]["PORT"], "4310")
+                self.assertEqual(app["ports"][0]["target"], 4310)
 
     def test_local_tokens_and_shell_precedence_preserve_literal_values(self):
         app = self.resolve(
@@ -620,9 +650,59 @@ class ComposeEnvironmentTests(unittest.TestCase):
         self.assertNotIn("NODE_OPTIONS", environment)
         self.assertEqual({key: environment[key] for key in module.FIXED_ENVIRONMENT}, module.FIXED_ENVIRONMENT)
         self.assertEqual(app["volumes"][0]["target"], "/app/data")
+        self.assertEqual(environment["PORT"], "9999")
+        self.assertEqual(app["ports"][0]["target"], 9999)
+        self.assertEqual(app["ports"][0]["published"], "9999")
+
+    def test_shell_port_overrides_file_for_app_and_both_mapping_ends(self):
+        app = self.resolve("PORT=54321\n", {"PORT": "54322"})
+        self.assertEqual(app["environment"]["PORT"], "54322")
+        self.assertEqual(app["ports"][0]["target"], 54322)
+        self.assertEqual(app["ports"][0]["published"], "54322")
+
 
 @unittest.skipUnless(os.environ.get("ZHIXU_TEST_IMAGE") and shutil.which("docker"), "Set ZHIXU_TEST_IMAGE to a local test image for isolated container creation")
 class ComposeContainerEnvironmentTests(unittest.TestCase):
+    def test_real_container_starts_and_passes_health_on_configured_port(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = "zhixu-port-test-" + uuid.uuid4().hex
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", 0))
+                port = listener.getsockname()[1]
+            shutil.copyfile(module.ROOT / "compose.yml", root / "compose.yml")
+            (root / ".env").write_text("PORT=" + str(port) + "\n", encoding="utf-8")
+            (root / "image.json").write_text(json.dumps({"services": {"app": {"image": os.environ["ZHIXU_TEST_IMAGE"]}}}), encoding="utf-8")
+            command = [
+                "docker", "compose", "--project-directory", str(root), "--project-name", project,
+                "--env-file", str(root / ".env"), "-f", str(root / "compose.yml"), "-f", str(root / "image.json"),
+            ]
+            environment = {key: value for key, value in os.environ.items() if not key.startswith("COMPOSE_") and key not in module.RUNTIME_ENVIRONMENT_KEYS}
+
+            def run(args):
+                return subprocess.run(args, env=environment, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=90).stdout
+
+            try:
+                run(command + ["up", "--detach", "--no-build", "--pull", "never", "app"])
+                container_id = run(command + ["ps", "--all", "--quiet", "app"]).strip()
+                deadline = time.monotonic() + 60
+                while True:
+                    inspected = json.loads(run(["docker", "inspect", container_id]))[0]
+                    health = inspected["State"].get("Health", {}).get("Status")
+                    if health == "healthy":
+                        break
+                    self.assertNotIn(inspected["State"]["Status"], ("exited", "dead"))
+                    self.assertNotEqual(health, "unhealthy")
+                    self.assertLess(time.monotonic(), deadline, "Custom-port container did not become healthy")
+                    time.sleep(0.5)
+                with urlopen("http://127.0.0.1:" + str(port) + "/api/health", timeout=5) as response:
+                    self.assertEqual(json.load(response), {"ok": True})
+                actual = dict(value.split("=", 1) for value in inspected["Config"]["Env"] if "=" in value)
+                self.assertEqual(actual["PORT"], str(port))
+                self.assertEqual(inspected["HostConfig"]["PortBindings"][str(port) + "/tcp"][0], {"HostIp": "127.0.0.1", "HostPort": str(port)})
+            finally:
+                run(command + ["down", "--volumes"])
+
     def test_real_container_receives_file_values_and_preserves_fixed_settings(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -635,7 +715,7 @@ class ComposeContainerEnvironmentTests(unittest.TestCase):
                 "docker", "compose", "--project-directory", str(root), "--project-name", project,
                 "--env-file", str(env_file), "-f", str(root / "compose.yml"), "-f", str(overlay),
             ]
-            environment = {key: value for key, value in os.environ.items() if not key.startswith("COMPOSE_") and key not in module.OPTIONAL_ENVIRONMENT}
+            environment = {key: value for key, value in os.environ.items() if not key.startswith("COMPOSE_") and key not in module.RUNTIME_ENVIRONMENT_KEYS}
 
             def run(args):
                 return subprocess.run(args, env=environment, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=90).stdout
@@ -652,9 +732,11 @@ class ComposeContainerEnvironmentTests(unittest.TestCase):
                     inspected = json.loads(run(["docker", "inspect", container_id]))[0]
                     actual = dict(value.split("=", 1) for value in inspected["Config"]["Env"] if "=" in value)
                     desired = module.resolved_environment(app)
-                    for key in (*module.FIXED_ENVIRONMENT, *module.OPTIONAL_ENVIRONMENT):
+                    for key in module.RUNTIME_ENVIRONMENT_KEYS:
                         self.assertEqual(actual.get(key), desired.get(key))
                     self.assertNotIn("NODE_OPTIONS", actual)
+                    binding = inspected["HostConfig"]["PortBindings"]["9999/tcp"][0]
+                    self.assertEqual(binding, {"HostIp": "127.0.0.1", "HostPort": "9999"})
             finally:
                 # Only this UUID-named test project's disposable resources are removed.
                 run(command + ["down", "--volumes"])

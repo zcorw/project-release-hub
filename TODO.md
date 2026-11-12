@@ -102,3 +102,11 @@ Execute T001 through T007 in order, reviewing one task at a time. T005 and T006 
       Modules: scripts/update-vps.py, tests/test_update_vps.py and operator docs.
       Verify: Healthy/unhealthy retry, repaired environment, stale overlay, running/stopped/missing containers, first install, backup/volume/image guards, configuration drift and isolated checks.
       Publication: Separate source commit and shared-branch push authorized. No live VPS operation or image publication requested.
+
+## Configurable deployment port
+
+- [x] T013 [P0] Honor .env PORT in Compose and VPS updates
+      Goal: Use the selected port for application listening and loopback host publication, including pending retries, with validated defaults and persistent data preserved.
+      Modules: compose.yml, scripts/update-vps.py, tests, .env.example and operator docs.
+      Verify: Default/custom/invalid port resolution, mismatched mapping rejection, normal update/retry and real isolated custom-port startup/health.
+      Publication: Separate source commit and shared-branch push authorized. No live VPS/proxy operation or image publication requested.

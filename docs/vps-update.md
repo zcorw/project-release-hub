@@ -9,7 +9,7 @@ Implementation and source publication do not deploy anything. The script never c
 - Bash, Python 3.9+, Git, Docker Engine, and Docker Compose v2 on the VPS.
 - Run from a clean, committed clone as the same Linux operator each time. This account must already be allowed to use Docker. Docker access is privileged; the script does not grant it.
 - Use the local Unix-socket Docker context. Remote Docker contexts and DOCKER_HOST/DOCKER_CONTEXT overrides are refused.
-- Use the repository's reviewed compose.yml: project zhixu, service app, volume zhixu_zhixu-data, and 127.0.0.1:4310:4310. The five documented optional environment settings are supported; arbitrary runtime keys, commands, extra services, alternative mounts and public ports are rejected.
+- Use the repository's reviewed compose.yml: project zhixu, service app, volume zhixu_zhixu-data, and 127.0.0.1:PORT:PORT (default 4310). PORT and the five documented optional environment settings are supported; arbitrary runtime keys, commands, extra services, alternative mounts and public address publication are rejected.
 - Keep enough disk space for the new image and two backup copies. No image pruning, backup retention, or volume deletion is performed.
 - Keep one canonical deployment checkout. All copies on this host share /tmp/zhixu-image-update.lock, but their records remain local to each checkout. Never delete the lock file or run direct Docker/Compose mutation commands while an update is active. A lock owned by a different operator fails closed; coordinate that operator change manually.
 
@@ -28,6 +28,7 @@ Edit it locally. Both plain Docker Compose and the updater read it; no shell sou
 
 Only these settings are forwarded:
 
+- PORT: application listening port and matching host/container mapping, default 4310; integer 1024-65535.
 - GITHUB_TOKEN: optional read-only GitHub Actions access.
 - HUB_MCP_TOKEN: optional local-only bearer token, at least 32 random characters.
 - HUB_SESSION_SECRET: optional local session persistence, required for HTTPS/OAuth; at least 48 random characters, retained across updates.
@@ -35,7 +36,7 @@ Only these settings are forwarded:
 
 Keep unused optional settings commented out rather than assigning empty values. The application retains its existing validation for token length, canonical HTTPS, explicit proxy trust and credential-mode conflicts. Initialize the owner privately with HUB_PUBLIC_URL and HUB_TRUST_PROXY omitted before enabling remote mode. Existing initialized accounts do not need a password reset.
 
-The container always uses PORT=4310, HUB_BIND_HOST=0.0.0.0 and HUB_DATA_DIR=/app/data. Native values in the same .env do not override these settings, the named data volume or loopback host binding. Unlisted .env keys are not passed into the container. Keep .env private and outside Git; do not print full docker compose config or Docker inspection results into shared logs because they can contain secrets. Use docker compose config --quiet for a syntax check.
+PORT applies to app listening and both ends of the loopback mapping. For example, PORT=54321 yields 127.0.0.1:54321:54321. Update an existing Nginx proxy_pass upstream to http://127.0.0.1:54321 in that example. Dockerfile ENV/EXPOSE 4310 is the image default; Compose overrides runtime PORT and the existing healthcheck reads it dynamically. The container still uses fixed HUB_BIND_HOST=0.0.0.0 and HUB_DATA_DIR=/app/data. Values in .env cannot change those settings, the named data volume or loopback host address. Unlisted .env keys are not passed into the container. Keep .env private and outside Git; do not print full docker compose config or Docker inspection results into shared logs because they can contain secrets. Use docker compose config --quiet for a syntax check.
 
 Changing .env requires recreating the app through this updater; a normal container restart retains the old environment. With a pending failed attempt, fix .env and use --retry to recreate its recorded candidate. With no pending attempt, run a normal update using the desired image. The --image mode below applies the same .env without rebuilding the application image. Do not put credentials into an image tag, digest, command argument or deployment record.
 
@@ -72,7 +73,7 @@ cat .deploy/latest-image.json
 
 Status compares the actual container with the last successful record and any unfinished attempt. latest-image.json is a record of the last verified success, not a live source of truth after a failed update or an external manual change.
 
-environmentMatches compares the running container with the current .env/shell configuration without printing values. False commonly means .env was edited after the container was created; run a normal update with the desired image to apply it. Recovery also requires an environment match, so --recover cannot mark a stale configuration successful.
+configuredPort shows the current selected port. environmentMatches compares the running container with the current .env/shell configuration, including PORT, without printing secrets. False commonly means .env was edited after the container was created; run a normal update with the desired image, or --retry for a pending attempt, to apply it. Recovery also requires an environment match, so --recover cannot mark a stale configuration successful.
 
 The record includes:
 

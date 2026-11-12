@@ -59,7 +59,7 @@ Set variables in the same terminal before starting the server:
 - HUB_MCP_TOKEN: local-only static token of at least 32 characters.
 - HUB_PUBLIC_URL, HUB_SESSION_SECRET, HUB_TRUST_PROXY: optional HTTPS/OAuth mode; see [account and OAuth guide](docs/account-oauth.md). MCP is disabled unless a local token or remote OAuth is configured.
 
-For Docker Compose and scripts/update-vps.sh, copy .env.example to a private .env in the repository root. Both read the five optional GitHub/MCP/OAuth settings; shell values take precedence. Compose keeps the container port, bind address and data directory fixed at 4310, 0.0.0.0 and /app/data, regardless of native settings in .env. Keep unused optional settings commented out. Native npm startup still requires shell variables and does not automatically load .env. Never paste tokens into a project description or commit them.
+For Docker Compose and scripts/update-vps.sh, copy .env.example to a private .env in the repository root. Both read PORT and the five optional GitHub/MCP/OAuth settings; shell values take precedence. PORT controls both app listening and loopback host publication, defaults to 4310 and accepts integers from 1024 through 65535. For PORT=54321 the mapping is 127.0.0.1:54321:54321. Keep an existing Nginx upstream aligned with that host port. Compose keeps the container bind address and data directory fixed at 0.0.0.0 and /app/data. Keep unused optional settings commented out. Native npm startup still requires shell variables and does not automatically load .env. Never paste tokens into a project description or commit them.
 
 GitHub repository values use owner/repo. Refresh runs only when you click “手动刷新”. This version does not trigger workflows, deploy releases, or write to GitHub.
 

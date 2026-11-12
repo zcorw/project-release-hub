@@ -19,8 +19,9 @@ import uuid
 IMAGE_ID = re.compile(r"sha256:[a-f0-9]{64}\Z")
 REGISTRY_DIGEST = re.compile(r"[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}\Z")
 ROOT = Path(__file__).resolve().parent.parent
-FIXED_ENVIRONMENT = {"PORT": "4310", "HUB_BIND_HOST": "0.0.0.0", "HUB_DATA_DIR": "/app/data"}
+FIXED_ENVIRONMENT = {"HUB_BIND_HOST": "0.0.0.0", "HUB_DATA_DIR": "/app/data"}
 OPTIONAL_ENVIRONMENT = ("GITHUB_TOKEN", "HUB_MCP_TOKEN", "HUB_PUBLIC_URL", "HUB_SESSION_SECRET", "HUB_TRUST_PROXY")
+RUNTIME_ENVIRONMENT_KEYS = ("PORT", *FIXED_ENVIRONMENT, *OPTIONAL_ENVIRONMENT)
 
 
 def resolved_environment(app):
@@ -133,19 +134,23 @@ class Updater:
         ports = app.get("ports", [])
         if len(ports) != 1 or ports[0].get("host_ip") != "127.0.0.1":
             raise UpdateError("The app must publish exactly one loopback-only port.")
-        if int(ports[0].get("target", 0)) != 4310 or str(ports[0].get("published")) != "4310":
-            raise UpdateError("This updater requires the reviewed 4310:4310 port mapping.")
         if app.get("network_mode") or not app.get("read_only") or app.get("privileged"):
             raise UpdateError("Unexpected container network/filesystem/security configuration.")
         if "ALL" not in app.get("cap_drop", []) or "no-new-privileges:true" not in app.get("security_opt", []):
             raise UpdateError("Expected dropped capabilities and no-new-privileges.")
         environment = app.get("environment") or {}
-        if not isinstance(environment, dict) or set(environment) - set(FIXED_ENVIRONMENT) - set(OPTIONAL_ENVIRONMENT):
-            raise UpdateError("Only the documented GitHub/MCP/OAuth environment settings are allowed.")
+        if not isinstance(environment, dict) or set(environment) - set(RUNTIME_ENVIRONMENT_KEYS):
+            raise UpdateError("Only PORT and the documented GitHub/MCP/OAuth environment settings are allowed.")
         if any(environment.get(key) != value for key, value in FIXED_ENVIRONMENT.items()):
-            raise UpdateError("Container PORT, HUB_BIND_HOST and HUB_DATA_DIR must retain their fixed values.")
+            raise UpdateError("Container HUB_BIND_HOST and HUB_DATA_DIR must retain their fixed values.")
         if any(value is not None and not isinstance(value, str) for value in environment.values()):
             raise UpdateError("Container environment values must be strings or unset.")
+        port = environment.get("PORT")
+        if not isinstance(port, str) or not re.fullmatch(r"[0-9]+", port) or not 1024 <= int(port) <= 65535:
+            raise UpdateError("PORT must be an integer between 1024 and 65535.")
+        if ports[0].get("target") != int(port) or str(ports[0].get("published")) != str(int(port)) or ports[0].get("protocol", "tcp") != "tcp":
+            raise UpdateError("The loopback host port and container target must both match PORT over TCP.")
+        self.port = int(port)
         if app.get("env_file") or app.get("command") or app.get("entrypoint"):
             raise UpdateError("Custom environment files, commands and entrypoints are not supported.")
         self.environment = resolved_environment(app)
@@ -159,7 +164,7 @@ class Updater:
 
     def environment_matches(self, container):
         actual = dict(item.split("=", 1) for item in container.get("Config", {}).get("Env", []) if "=" in item)
-        return all(actual.get(key) == self.environment.get(key) for key in (*FIXED_ENVIRONMENT, *OPTIONAL_ENVIRONMENT))
+        return all(actual.get(key) == self.environment.get(key) for key in RUNTIME_ENVIRONMENT_KEYS)
 
     def current(self):
         ids = self.run(self.compose + ["ps", "--all", "--quiet", "app"]).split()
@@ -193,8 +198,8 @@ class Updater:
         if not health or health[0] == "NONE" or config.get("User") not in ("node", "1000", "1000:1000"):
             raise UpdateError("Candidate requires the reviewed non-root user and a health check.")
         env = dict(item.split("=", 1) for item in config.get("Env", []) if "=" in item)
-        if env.get("HUB_DATA_DIR") != "/app/data" or env.get("PORT") != "4310":
-            raise UpdateError("Candidate must use /app/data and port 4310.")
+        if env.get("HUB_DATA_DIR") != "/app/data":
+            raise UpdateError("Candidate must use /app/data; Compose supplies the runtime PORT.")
         return image
 
     def backup(self, container, run_id):
@@ -238,6 +243,7 @@ class Updater:
         return {
             "actualImageId": container.get("Image") if container else None,
             "actualHealth": container.get("State", {}).get("Health", {}).get("Status") if container else None,
+            "configuredPort": self.port,
             "environmentMatches": self.environment_matches(container) if container else None,
             "latestSuccessful": json.loads(self.latest.read_text(encoding="utf-8")) if self.latest.exists() else None,
             "pendingAttempt": json.loads(self.pending.read_text(encoding="utf-8")) if self.pending.exists() else None,

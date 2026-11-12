@@ -102,3 +102,14 @@ Date: 2026-11-12. --retry now recreates the journal's candidate with corrected c
 - Real Compose/container environment checks used the existing unchanged application image and UUID-named disposable resources, which were removed after inspection. Actual retry lifecycle failures are tested with the fake Docker adapter; no real VPS recovery or production data was exercised.
 
 The user subsequently authorized this verified retry change as its own source commit and a normal shared-branch push. No image publication or live VPS operation is included; remote delivery results are verified separately.
+
+## Configurable Docker port follow-up
+
+Date: 2026-11-12. PORT is now interpolated into the Compose application environment and matching loopback host/container mapping. The updater validates the selected port instead of requiring 4310 and reports configuredPort.
+
+- The suite now has 52 tests: Windows with the local application test image passed 51 and skipped Linux flock; a networkless Linux container passed 45 and skipped the seven Docker CLI/container cases. Together they exercise all cases.
+- Real Compose resolution verifies default 4310, .env custom ports and shell precedence across the app and both mapping endpoints. Invalid ranges/formats and mappings inconsistent with PORT are rejected by the updater. The repaired-environment retry case also changes PORT and verifies it reaches the recreated candidate.
+- A separate UUID-named Compose test started the existing application image on a free non-default loopback port, checked Docker health, queried /api/health through that published port and inspected the effective PORT/mapping. Its independent container, network and data volume were removed. This demonstrates that the existing image's default/EXPOSE 4310 does not prevent runtime port selection.
+- npm run check passed formatting, strict TypeScript, all 97 application tests and production build. All six isolated Chrome flows passed; final formatting/diff checks also passed.
+
+No real .env, VPS, proxy or registry was changed. The user subsequently authorized separate commits for retry and port changes on one working branch and a normal push. Remote delivery results are verified separately.

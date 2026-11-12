@@ -5,7 +5,7 @@ services:
     build: .
     init: true
     environment:
-      PORT: '4310'
+      PORT: '${PORT:-4310}'
       HUB_BIND_HOST: 0.0.0.0
       HUB_DATA_DIR: /app/data
       GITHUB_TOKEN:
@@ -14,7 +14,7 @@ services:
       HUB_SESSION_SECRET:
       HUB_TRUST_PROXY:
     ports:
-      - '127.0.0.1:4310:4310'
+      - '127.0.0.1:${PORT:-4310}:${PORT:-4310}'
     volumes:
       - zhixu-data:/app/data
     read_only: true
