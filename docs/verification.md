@@ -91,3 +91,25 @@ Date: 2026-11-11. This supersedes the earlier claim that the updater rejects all
 - Bash syntax and final formatting/diff checks passed. Windows sandbox restrictions on atomic replacement in its temporary directory were avoided by using a workspace-owned disposable test directory or the unrestricted local test process.
 
 Not performed: a live VPS install/update, real GHCR pull/authentication/publication, public TLS/Nginx validation or ChatGPT onboarding. Source commit/push was separately authorized after this verification; remote delivery results must be checked separately.
+
+## Pending-update retry follow-up
+
+Date: 2026-11-12. --retry now recreates the journal's candidate with corrected configuration and regenerates a stale/missing selected-image.json. --recover still only verifies a candidate that is already healthy.
+
+- Updater suite: 48 tests total. Windows with the local test image passed 47 and skipped Linux flock. A networkless Linux container with the repository mounted read-only passed 43 including flock and skipped the five Docker CLI/container checks. Those environments jointly exercised all cases.
+- Sixteen new retry regressions passed: corrected settings, stale overlay repair, retained original/fresh backups, healthy/unhealthy/start-failure retries, first-install retries, stopped/missing containers, missing backups/volumes, unexpected image identities, backup failure and concurrent source/configuration/journal/container changes. Normal update/recovery/rollback regressions still passed.
+- npm run check passed formatting, strict TypeScript, 97 application tests and production build. All six isolated Chrome scenarios passed. CLI help, Bash entry-point syntax and final diff checks passed.
+- Real Compose/container environment checks used the existing unchanged application image and UUID-named disposable resources, which were removed after inspection. Actual retry lifecycle failures are tested with the fake Docker adapter; no real VPS recovery or production data was exercised.
+
+The user subsequently authorized this verified retry change as its own source commit and a normal shared-branch push. No image publication or live VPS operation is included; remote delivery results are verified separately.
+
+## Configurable Docker port follow-up
+
+Date: 2026-11-12. PORT is now interpolated into the Compose application environment and matching loopback host/container mapping. The updater validates the selected port instead of requiring 4310 and reports configuredPort.
+
+- The suite now has 52 tests: Windows with the local application test image passed 51 and skipped Linux flock; a networkless Linux container passed 45 and skipped the seven Docker CLI/container cases. Together they exercise all cases.
+- Real Compose resolution verifies default 4310, .env custom ports and shell precedence across the app and both mapping endpoints. Invalid ranges/formats and mappings inconsistent with PORT are rejected by the updater. The repaired-environment retry case also changes PORT and verifies it reaches the recreated candidate.
+- A separate UUID-named Compose test started the existing application image on a free non-default loopback port, checked Docker health, queried /api/health through that published port and inspected the effective PORT/mapping. Its independent container, network and data volume were removed. This demonstrates that the existing image's default/EXPOSE 4310 does not prevent runtime port selection.
+- npm run check passed formatting, strict TypeScript, all 97 application tests and production build. All six isolated Chrome flows passed; final formatting/diff checks also passed.
+
+No real .env, VPS, proxy or registry was changed. The user subsequently authorized separate commits for retry and port changes on one working branch and a normal push. Remote delivery results are verified separately.

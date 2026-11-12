@@ -9,7 +9,7 @@ Implementation and source publication do not deploy anything. The script never c
 - Bash, Python 3.9+, Git, Docker Engine, and Docker Compose v2 on the VPS.
 - Run from a clean, committed clone as the same Linux operator each time. This account must already be allowed to use Docker. Docker access is privileged; the script does not grant it.
 - Use the local Unix-socket Docker context. Remote Docker contexts and DOCKER_HOST/DOCKER_CONTEXT overrides are refused.
-- Use the repository's reviewed compose.yml: project zhixu, service app, volume zhixu_zhixu-data, and 127.0.0.1:4310:4310. The five documented optional environment settings are supported; arbitrary runtime keys, commands, extra services, alternative mounts and public ports are rejected.
+- Use the repository's reviewed compose.yml: project zhixu, service app, volume zhixu_zhixu-data, and 127.0.0.1:PORT:PORT (default 4310). PORT and the five documented optional environment settings are supported; arbitrary runtime keys, commands, extra services, alternative mounts and public address publication are rejected.
 - Keep enough disk space for the new image and two backup copies. No image pruning, backup retention, or volume deletion is performed.
 - Keep one canonical deployment checkout. All copies on this host share /tmp/zhixu-image-update.lock, but their records remain local to each checkout. Never delete the lock file or run direct Docker/Compose mutation commands while an update is active. A lock owned by a different operator fails closed; coordinate that operator change manually.
 
@@ -28,6 +28,7 @@ Edit it locally. Both plain Docker Compose and the updater read it; no shell sou
 
 Only these settings are forwarded:
 
+- PORT: application listening port and matching host/container mapping, default 4310; integer 1024-65535.
 - GITHUB_TOKEN: optional read-only GitHub Actions access.
 - HUB_MCP_TOKEN: optional local-only bearer token, at least 32 random characters.
 - HUB_SESSION_SECRET: optional local session persistence, required for HTTPS/OAuth; at least 48 random characters, retained across updates.
@@ -35,9 +36,9 @@ Only these settings are forwarded:
 
 Keep unused optional settings commented out rather than assigning empty values. The application retains its existing validation for token length, canonical HTTPS, explicit proxy trust and credential-mode conflicts. Initialize the owner privately with HUB_PUBLIC_URL and HUB_TRUST_PROXY omitted before enabling remote mode. Existing initialized accounts do not need a password reset.
 
-The container always uses PORT=4310, HUB_BIND_HOST=0.0.0.0 and HUB_DATA_DIR=/app/data. Native values in the same .env do not override these settings, the named data volume or loopback host binding. Unlisted .env keys are not passed into the container. Keep .env private and outside Git; do not print full docker compose config or Docker inspection results into shared logs because they can contain secrets. Use docker compose config --quiet for a syntax check.
+PORT applies to app listening and both ends of the loopback mapping. For example, PORT=54321 yields 127.0.0.1:54321:54321. Update an existing Nginx proxy_pass upstream to http://127.0.0.1:54321 in that example. Dockerfile ENV/EXPOSE 4310 is the image default; Compose overrides runtime PORT and the existing healthcheck reads it dynamically. The container still uses fixed HUB_BIND_HOST=0.0.0.0 and HUB_DATA_DIR=/app/data. Values in .env cannot change those settings, the named data volume or loopback host address. Unlisted .env keys are not passed into the container. Keep .env private and outside Git; do not print full docker compose config or Docker inspection results into shared logs because they can contain secrets. Use docker compose config --quiet for a syntax check.
 
-Changing .env requires recreating the app through this updater; a normal container restart retains the old environment. The --image mode below applies the same .env without rebuilding the application image. Do not put credentials into an image tag, digest, command argument or deployment record.
+Changing .env requires recreating the app through this updater; a normal container restart retains the old environment. With a pending failed attempt, fix .env and use --retry to recreate its recorded candidate. With no pending attempt, run a normal update using the desired image. The --image mode below applies the same .env without rebuilding the application image. Do not put credentials into an image tag, digest, command argument or deployment record.
 
 ## Normal update after changing code
 
@@ -72,7 +73,7 @@ cat .deploy/latest-image.json
 
 Status compares the actual container with the last successful record and any unfinished attempt. latest-image.json is a record of the last verified success, not a live source of truth after a failed update or an external manual change.
 
-environmentMatches compares the running container with the current .env/shell configuration without printing values. False commonly means .env was edited after the container was created; run a normal update with the desired image to apply it. Recovery also requires an environment match, so --recover cannot mark a stale configuration successful.
+configuredPort shows the current selected port. environmentMatches compares the running container with the current .env/shell configuration, including PORT, without printing secrets. False commonly means .env was edited after the container was created; run a normal update with the desired image, or --retry for a pending attempt, to apply it. Recovery also requires an environment match, so --recover cannot mark a stale configuration successful.
 
 The record includes:
 
@@ -81,6 +82,7 @@ The record includes:
 - registryDigest and repoDigests: registry references when available. A local image ID is **not** falsely labeled a registry manifest digest.
 - imageRevision: the image's own OCI revision label, or null if absent. checkoutCommit describes the local checkout/configuration and does not claim a pulled image was built from it.
 - verifiedAt, operation, volume, backupPath, previousImageId, and a bounded previousSuccessful record.
+- After retries: retryCount, retriedAt, retryCheckoutCommit and retryBackupPath. The original backupPath remains the pre-update backup; a backup taken immediately before a retry is tracked separately.
 
 Keep .deploy/ private and preserve it across source updates. Do not commit it or print its backup contents in logs. It contains local paths and backup copies with project data and the password hash.
 
@@ -107,11 +109,26 @@ docker compose --project-name zhixu -f compose.yml logs --tail 100 app
 
 Review logs locally because they may contain private application data. Check pendingAttempt.previousImageId, pendingAttempt.backupPath, and latestSuccessful. Do not remove the journal just to retry.
 
+When the candidate failed because of incorrect environment settings, fix .env and run:
+
+```bash
+bash scripts/update-vps.sh --retry
+bash scripts/update-vps.sh --status
+```
+
+This is the supported path for applying corrected configuration to an unfinished update. It reads the exact local candidate image ID from pending-update.json, regenerates selected-image.json automatically and recreates app with the reviewed current environment. It does not build, pull, choose a different image or restore SQLite. Even a stale/missing selected-image.json does not require a manual edit. The pending local image must still exist; do not prune it.
+
+Retry runs under the same host-wide lock. The current container must use either the pending candidate or its recorded predecessor. Existing database volumes and retained backups are checked before replacement. A running container is backed up again; the original pre-update backup remains referenced, and the fresh snapshot is recorded as retryBackupPath. A stopped/missing container can retry using a retained backup, while a genuine failed first install can retry without a preexisting backup. Configuration, source and container changes during preparation abort before replacement. An unsuccessful retry keeps the journal/backups and does not advance the successful record.
+
+Once that candidate is healthy and the pending journal is finalized, select any newer remote image through a normal --image update. Do not replace the pending image ID with a newer image manually.
+
 If the recorded candidate has become healthy and uses the expected image/volume, this verifies it again and completes its record without recreating it:
 
 ```bash
 bash scripts/update-vps.sh --recover
 ```
+
+Unlike --retry, --recover does not recreate the container or reload .env. Use it when the existing container is already running with the desired configuration.
 
 For an **explicit image-only rollback**, first confirm that the old application version can use the current database schema. Then copy the exact old sha256 image ID from status:
 
@@ -140,7 +157,7 @@ docker compose --project-name zhixu -f compose.yml -f .deploy/selected-image.jso
 bash scripts/update-vps.sh --status
 ```
 
-Do not use that overlay after a failed attempt without reviewing it: it may select the failed candidate. Never run compose down --volumes or volume prune against the database. Preserve old images needed for rollback. Export a backup to independent private storage for disaster recovery; both copies created here still live on the same host.
+For an unfinished attempt, use --retry or --recover instead of manually editing/using the image overlay. Never run compose down --volumes or volume prune against the database. Preserve old images needed for rollback. Export a backup to independent private storage for disaster recovery; both copies created here still live on the same host.
 
 ## Verification scope
 

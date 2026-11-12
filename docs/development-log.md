@@ -101,3 +101,27 @@ Validation: aggregate application checks passed with 97 tests and production bui
 Review: PASS after reviewing environment resolution, fixed storage/network settings, configuration drift, secret-free failure/success records and recovery behavior. Test fixtures did not read an operator .env or open real user databases. No source commit/push, GHCR publication, live VPS operation, Nginx configuration or ChatGPT connection was performed.
 
 After the implementation and verification report, the user authorized committing and pushing this .env integration to the existing zcorw/project-release-hub remote. Delivery reuses the current non-protected fix/private-ghcr-workflow branch, with a normal Conventional Commit and push. No merge, image publication or live VPS operation is included; remote delivery results are verified separately.
+
+## Step 13: Retry a pending update after configuration repair
+
+Date: 2026-11-12. The operator reported an unhealthy candidate caused by incorrect environment settings and questioned why applying a correction required manual image-selection edits. The missing retry path was recorded in vps-update-plan.md before implementation. This change adds a supported recovery operation without discarding the pending journal or weakening its existing update guard.
+
+Result: --retry reads and validates the pending candidate, applies current .env through the existing Compose path and regenerates the overlay automatically. It runs under the host-wide lock, checks data-volume and backup availability, accepts only the recorded candidate/predecessor, rechecks source/configuration/container/journal identity and records success only after image/environment/volume/health verification. A running candidate is backed up again; retryBackupPath tracks the fresh snapshot while backupPath preserves the pre-update snapshot. Stopped/missing candidates use a retained backup, with a bounded exception for a genuine failed first installation. Retry performs no build, pull or database restore. --recover remains verification-only.
+
+Validation: the 48-case updater suite passed 47 cases on Windows including actual Compose/container environment checks and skipped Linux flock; a networkless read-only-mounted Linux container passed all 43 updater/retry cases including flock and skipped the five Docker-CLI-dependent cases. All 97 application tests, production build and six isolated Chrome flows passed. CLI help exposes the mutually exclusive --retry mode; Bash syntax, formatting and diff checks passed. The 16 new regressions cover configuration repair, stale overlays, repeated failures, retained/fresh backups, first install, stopped/missing candidates, unrelated images, source/configuration/journal/container changes and blocked backup operations.
+
+Review: PASS. The previous manual-edit advice is superseded by --retry. No operator .env, live VPS, actual user database, image publication or remote source write was used for this follow-up.
+
+After verification, the user authorized a separate Conventional Commit for this retry change and a normal push on the existing working branch. Image publication and live VPS operations remain outside that source-delivery authorization.
+
+## Step 14: Honor the configured application port in Docker
+
+Date: 2026-11-12. The operator reported that PORT in .env remained ineffective. Compose still supplied a literal 4310 and the updater required a 4310:4310 mapping. Decisions were recorded before implementation; this follow-up supersedes that earlier fixed-port default while preserving loopback publication and fixed SQLite storage.
+
+Result: Compose resolves PORT from .env/the shell, defaults to 4310 and uses it for app listening plus both ends of the 127.0.0.1 mapping. The updater checks the supported 1024-65535 range and mapping consistency, includes PORT in environment verification and reports configuredPort. An image's default PORT/EXPOSE metadata no longer determines deployment port. Existing images work because the application's config and image healthcheck already read runtime PORT. Pending --retry can move the candidate from its old port to the corrected one. Operator docs explain that an existing Nginx upstream must follow the selected port; no real proxy was changed.
+
+Validation: the 52-case updater/configuration suite passed 51 tests on Windows and skipped Linux flock. A networkless Linux container passed the 45 updater/retry cases including flock and skipped seven Docker CLI/container cases. Real Compose tests verified shell/file precedence and matching ports; a UUID-named isolated container actually started at a dynamically selected non-default port, passed Docker health and returned HTTP 200 from /api/health, then its resources were removed. Default behavior, invalid ports, mismatched mappings and port changes during pending retry also passed. Aggregate checks (97 application tests and production build), all six Chrome flows, formatting and diff checks passed.
+
+Review: PASS. Neither user .env contents nor live VPS data were accessed. The retry and configurable-port changes remain local source work; no commit/push, registry publication or live deployment was performed.
+
+After verification, the user authorized a separate Conventional Commit for the port change, following the retry commit on the same working branch, and a normal push to the existing remote. Remote delivery results are checked separately; no merge into the default branch, registry publication or VPS operation is included.

@@ -19,8 +19,9 @@ import uuid
 IMAGE_ID = re.compile(r"sha256:[a-f0-9]{64}\Z")
 REGISTRY_DIGEST = re.compile(r"[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}\Z")
 ROOT = Path(__file__).resolve().parent.parent
-FIXED_ENVIRONMENT = {"PORT": "4310", "HUB_BIND_HOST": "0.0.0.0", "HUB_DATA_DIR": "/app/data"}
+FIXED_ENVIRONMENT = {"HUB_BIND_HOST": "0.0.0.0", "HUB_DATA_DIR": "/app/data"}
 OPTIONAL_ENVIRONMENT = ("GITHUB_TOKEN", "HUB_MCP_TOKEN", "HUB_PUBLIC_URL", "HUB_SESSION_SECRET", "HUB_TRUST_PROXY")
+RUNTIME_ENVIRONMENT_KEYS = ("PORT", *FIXED_ENVIRONMENT, *OPTIONAL_ENVIRONMENT)
 
 
 def resolved_environment(app):
@@ -133,19 +134,23 @@ class Updater:
         ports = app.get("ports", [])
         if len(ports) != 1 or ports[0].get("host_ip") != "127.0.0.1":
             raise UpdateError("The app must publish exactly one loopback-only port.")
-        if int(ports[0].get("target", 0)) != 4310 or str(ports[0].get("published")) != "4310":
-            raise UpdateError("This updater requires the reviewed 4310:4310 port mapping.")
         if app.get("network_mode") or not app.get("read_only") or app.get("privileged"):
             raise UpdateError("Unexpected container network/filesystem/security configuration.")
         if "ALL" not in app.get("cap_drop", []) or "no-new-privileges:true" not in app.get("security_opt", []):
             raise UpdateError("Expected dropped capabilities and no-new-privileges.")
         environment = app.get("environment") or {}
-        if not isinstance(environment, dict) or set(environment) - set(FIXED_ENVIRONMENT) - set(OPTIONAL_ENVIRONMENT):
-            raise UpdateError("Only the documented GitHub/MCP/OAuth environment settings are allowed.")
+        if not isinstance(environment, dict) or set(environment) - set(RUNTIME_ENVIRONMENT_KEYS):
+            raise UpdateError("Only PORT and the documented GitHub/MCP/OAuth environment settings are allowed.")
         if any(environment.get(key) != value for key, value in FIXED_ENVIRONMENT.items()):
-            raise UpdateError("Container PORT, HUB_BIND_HOST and HUB_DATA_DIR must retain their fixed values.")
+            raise UpdateError("Container HUB_BIND_HOST and HUB_DATA_DIR must retain their fixed values.")
         if any(value is not None and not isinstance(value, str) for value in environment.values()):
             raise UpdateError("Container environment values must be strings or unset.")
+        port = environment.get("PORT")
+        if not isinstance(port, str) or not re.fullmatch(r"[0-9]+", port) or not 1024 <= int(port) <= 65535:
+            raise UpdateError("PORT must be an integer between 1024 and 65535.")
+        if ports[0].get("target") != int(port) or str(ports[0].get("published")) != str(int(port)) or ports[0].get("protocol", "tcp") != "tcp":
+            raise UpdateError("The loopback host port and container target must both match PORT over TCP.")
+        self.port = int(port)
         if app.get("env_file") or app.get("command") or app.get("entrypoint"):
             raise UpdateError("Custom environment files, commands and entrypoints are not supported.")
         self.environment = resolved_environment(app)
@@ -159,7 +164,7 @@ class Updater:
 
     def environment_matches(self, container):
         actual = dict(item.split("=", 1) for item in container.get("Config", {}).get("Env", []) if "=" in item)
-        return all(actual.get(key) == self.environment.get(key) for key in (*FIXED_ENVIRONMENT, *OPTIONAL_ENVIRONMENT))
+        return all(actual.get(key) == self.environment.get(key) for key in RUNTIME_ENVIRONMENT_KEYS)
 
     def current(self):
         ids = self.run(self.compose + ["ps", "--all", "--quiet", "app"]).split()
@@ -193,8 +198,8 @@ class Updater:
         if not health or health[0] == "NONE" or config.get("User") not in ("node", "1000", "1000:1000"):
             raise UpdateError("Candidate requires the reviewed non-root user and a health check.")
         env = dict(item.split("=", 1) for item in config.get("Env", []) if "=" in item)
-        if env.get("HUB_DATA_DIR") != "/app/data" or env.get("PORT") != "4310":
-            raise UpdateError("Candidate must use /app/data and port 4310.")
+        if env.get("HUB_DATA_DIR") != "/app/data":
+            raise UpdateError("Candidate must use /app/data; Compose supplies the runtime PORT.")
         return image
 
     def backup(self, container, run_id):
@@ -238,28 +243,89 @@ class Updater:
         return {
             "actualImageId": container.get("Image") if container else None,
             "actualHealth": container.get("State", {}).get("Health", {}).get("Status") if container else None,
+            "configuredPort": self.port,
             "environmentMatches": self.environment_matches(container) if container else None,
             "latestSuccessful": json.loads(self.latest.read_text(encoding="utf-8")) if self.latest.exists() else None,
             "pendingAttempt": json.loads(self.pending.read_text(encoding="utf-8")) if self.pending.exists() else None,
         }
 
-    def update(self, registry_image=None, rollback=None, recover=False):
-        configuration = self.validate_config()
-        if recover:
-            if not self.pending.exists():
-                raise UpdateError("No interrupted attempt exists to verify.")
-            record = json.loads(self.pending.read_text(encoding="utf-8"))
-            if record.get("volume") != self.volume:
-                raise UpdateError("The interrupted attempt uses a different data volume.")
-            self.healthy(record["imageId"])
-            return self.finish(record)
-        if self.pending.exists() and not rollback:
-            raise UpdateError("An unfinished update exists. Use --status, then --recover or an explicit --rollback IMAGE_ID after reviewing the database.")
+    def clean_checkout(self):
         checkout = self.run(["git", "rev-parse", "HEAD"])
         if not re.fullmatch(r"[a-f0-9]{40,64}", checkout):
             raise UpdateError("Expected a committed Git checkout.")
         if self.run(["git", "status", "--porcelain", "--untracked-files=normal"]):
             raise UpdateError("Commit or remove source changes before updating; the build must match the recorded checkout.")
+        return checkout
+
+    def recheck_preparation(self, checkout, configuration, old):
+        if self.run(["git", "rev-parse", "HEAD"]) != checkout or self.run(["git", "status", "--porcelain", "--untracked-files=normal"]):
+            raise UpdateError("Source changed during preparation; refusing replacement.")
+        if self.validate_config() != configuration:
+            raise UpdateError("Compose or environment settings changed during preparation; refusing replacement.")
+        actual = self.current()
+        if (actual or {}).get("Id") != (old or {}).get("Id") or (actual or {}).get("Image") != (old or {}).get("Image"):
+            raise UpdateError("Container changed during preparation; refusing replacement.")
+
+    def pending_record(self):
+        if not self.pending.exists():
+            raise UpdateError("No interrupted attempt exists; use a normal update for a new image.")
+        record = json.loads(self.pending.read_text(encoding="utf-8"))
+        if not isinstance(record, dict) or record.get("schemaVersion") != 1:
+            raise UpdateError("Unsupported pending attempt record.")
+        if record.get("volume") != self.volume:
+            raise UpdateError("The interrupted attempt uses a different data volume.")
+        if not isinstance(record.get("imageId"), str) or not IMAGE_ID.fullmatch(record["imageId"]):
+            raise UpdateError("The pending attempt requires an exact local sha256 image ID.")
+        return record
+
+    def retry_pending(self, configuration):
+        record = self.pending_record()
+        checkout = self.clean_checkout()
+        previous = record.get("previousImageId")
+        if previous is not None and (not isinstance(previous, str) or not IMAGE_ID.fullmatch(previous)):
+            raise UpdateError("The pending predecessor image ID is invalid.")
+        old = self.current()
+        if old and old.get("Image") not in (record["imageId"], previous):
+            raise UpdateError("Current container is neither the pending candidate nor its recorded predecessor.")
+        first_install = previous is None and record.get("previousSuccessful") is None and not self.latest.exists()
+        retained_backup = any(
+            isinstance(record.get(key), str) and Path(record[key]).is_file() and Path(record[key]).stat().st_size > 0
+            for key in ("backupPath", "retryBackupPath")
+        )
+        if not first_install and not retained_backup:
+            raise UpdateError("Retry requires a retained backup; preserve/review the database before recovery.")
+        if not first_install and not self.volume_exists():
+            raise UpdateError("The pending data volume is missing; refusing to create an empty replacement.")
+        if self.image(record["imageId"])["Id"] != record["imageId"]:
+            raise UpdateError("The local image does not match the pending candidate.")
+        retry_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-retry-" + uuid.uuid4().hex[:12]
+        retry_backup = record.get("retryBackupPath")
+        if old and old.get("State", {}).get("Running"):
+            retry_backup = self.backup(old, retry_id)
+        self.recheck_preparation(checkout, configuration, old)
+        if not first_install and not self.volume_exists():
+            raise UpdateError("The pending data volume disappeared during preparation.")
+        if json.loads(self.pending.read_text(encoding="utf-8")) != record:
+            raise UpdateError("The pending attempt changed during preparation; refusing replacement.")
+        retried = {**record, "retryCount": int(record.get("retryCount", 0)) + 1,
+                   "retriedAt": now(), "retryCheckoutCommit": checkout, "retryBackupPath": retry_backup}
+        atomic_json(self.pending, retried)
+        # Regenerate any stale overlay from the journal, using the same candidate.
+        self.start(record["imageId"])
+        self.healthy(record["imageId"])
+        return self.finish(retried)
+
+    def update(self, registry_image=None, rollback=None, recover=False, retry=False):
+        configuration = self.validate_config()
+        if retry:
+            return self.retry_pending(configuration)
+        if recover:
+            record = self.pending_record()
+            self.healthy(record["imageId"])
+            return self.finish(record)
+        if self.pending.exists() and not rollback:
+            raise UpdateError("An unfinished update exists. Use --status, --retry after fixing .env, --recover to verify, or an explicit --rollback IMAGE_ID after reviewing the database.")
+        checkout = self.clean_checkout()
         old = self.current()
         # A rollback may follow a failed startup. Preserve the previous backup in the journal.
         prior_attempt = json.loads(self.pending.read_text(encoding="utf-8")) if self.pending.exists() else None
@@ -291,14 +357,8 @@ class Updater:
                 backup = prior_attempt["backupPath"]
             else:
                 backup = self.backup(old, run_id)
-        if self.run(["git", "rev-parse", "HEAD"]) != checkout or self.run(["git", "status", "--porcelain", "--untracked-files=normal"]):
-            raise UpdateError("Source changed during preparation; refusing replacement.")
-        if self.validate_config() != configuration:
-            raise UpdateError("Compose or environment settings changed during preparation; refusing replacement.")
         # Recheck before replacement; never overwrite a concurrent external container change.
-        actual = self.current()
-        if (actual or {}).get("Id") != (old or {}).get("Id") or (actual or {}).get("Image") != (old or {}).get("Image"):
-            raise UpdateError("Container changed during preparation; refusing replacement.")
+        self.recheck_preparation(checkout, configuration, old)
         record = {
             "schemaVersion": 1, "operation": mode, "attemptId": run_id,
             "startedAt": now(), "imageId": candidate["Id"],
@@ -333,6 +393,7 @@ def main():
     modes.add_argument("--rollback", metavar="IMAGE_ID", help="Explicit image-only rollback; never restores SQLite")
     modes.add_argument("--status", action="store_true", help="Compare actual container with saved successful/pending state")
     modes.add_argument("--recover", action="store_true", help="Verify and record a healthy interrupted candidate")
+    modes.add_argument("--retry", action="store_true", help="Recreate the pending candidate using the corrected .env; no build or pull")
     parser.add_argument("--timeout", type=int, default=120, help="Health wait in seconds (1-1800)")
     args = parser.parse_args()
     if not 1 <= args.timeout <= 1800:
@@ -345,11 +406,11 @@ def main():
     signal.signal(signal.SIGINT, interrupted)
     try:
         with update_lock(updater.state):
-            result = updater.status() if args.status else updater.update(args.image, args.rollback, args.recover)
+            result = updater.status() if args.status else updater.update(args.image, args.rollback, args.recover, args.retry)
             print(json.dumps(result, indent=2))
     except (UpdateError, OSError, ValueError, KeyError) as error:
         print(f"Update failed: {error}", file=sys.stderr)
-        print("No failed candidate is recorded as successful. Inspect --status; review the backup and schema compatibility before an explicit rollback. No volumes/images were deleted.", file=sys.stderr)
+        print("No failed candidate is recorded as successful. Inspect --status and container logs. After fixing configuration, use --retry to recreate or --recover to verify. Review backups/schema compatibility before --rollback. No volumes/images were deleted.", file=sys.stderr)
         return 1
     return 0
 
