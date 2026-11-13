@@ -142,3 +142,11 @@ Execute T001 through T007 in order, reviewing one task at a time. T005 and T006 
       Modules: shared application service, MCP, OAuth consent/account text, tests and docs.
       Verify: Local-token/OAuth SDK mutation flows, mixed-batch permissions/rollback, duplicate creation, legacy pending requests, web confirmation/reconciliation and browser visibility/history/undo; aggregate checks and diff review.
       Publication: After verification, the user authorized a separate source commit and normal push on the existing working branch. No image publication, deployment or persistent external access requested. See docs/mcp-direct-writes-plan.md.
+
+## Project card task and issue progress
+
+- [x] T018 [P2] Show task and issue progress independently on overview project cards
+      Goal: Preserve feature progress, scope counts to each project, and show explicit empty states.
+      Modules: web/project-progress.tsx, overview, tests, and docs/project-card-progress.md.
+      Verify: Status/isolation unit tests and browser refresh/narrow-layout regression. See CI for browser execution results.
+      Publication: New branch and draft PR authorized; no merge, image publication or deployment.

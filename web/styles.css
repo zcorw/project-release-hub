@@ -1347,3 +1347,10 @@ textarea {
   margin-top: 6px;
   font-weight: normal;
 }
+
+.project-work-progress {
+  margin-top: 1rem;
+}
+.project-work-progress p {
+  margin: 0.45rem 0 0;
+}
