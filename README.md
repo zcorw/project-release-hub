@@ -6,7 +6,7 @@ A local-first web workspace for personal software projects, concrete feature pla
 
 ## What works in this version
 
-- Chinese responsive dashboard with cross-project feature progress and one environment per project.
+- Chinese responsive dashboard with per-project feature, task and issue progress and one environment per project.
 - Manual create, edit, and recoverable delete for projects, features, tasks, issues, and releases.
 - Feature acceptance criteria, planned dates, priorities, and target releases; tasks/issues can link to a feature.
 - Single-owner accounts with persistent sessions, password changes, session/grant revocation, and CSRF-protected web writes.

@@ -20,6 +20,7 @@ import { AccountSettings, clearOAuthRequest, resumeOAuth } from './account';
 import { RebaseDialog } from './rebase';
 import type { AuthStatus } from './types';
 import { EntityForm, Modal, RecordDetails, Tag, kindNames, label } from './components';
+import { ProjectWorkProgress } from './project-progress';
 import './styles.css';
 
 const emptySnapshot: Snapshot = { entities: [], requests: [], history: [], actions: [] };
@@ -611,6 +612,18 @@ function App() {
                             <span className="dot-separator">·</span>{' '}
                             {fs.filter((f) => f.status === 'blocked').length} 受阻
                           </div>
+                          <ProjectWorkProgress
+                            entities={entities}
+                            projectId={p.id}
+                            projectName={p.name}
+                            kind="task"
+                          />
+                          <ProjectWorkProgress
+                            entities={entities}
+                            projectId={p.id}
+                            projectName={p.name}
+                            kind="issue"
+                          />
                           <footer className="row">
                             <span>
                               {p.environmentName} · {p.deployedVersion || '未记录部署'}
