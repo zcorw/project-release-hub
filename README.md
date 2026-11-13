@@ -11,11 +11,11 @@ A local-first web workspace for personal software projects, concrete feature pla
 - Feature acceptance criteria, planned dates, priorities, and target releases; tasks/issues can link to a feature.
 - Single-owner accounts with persistent sessions, password changes, session/grant revocation, and CSRF-protected web writes.
 - Optional HTTPS/OAuth mode with explicit consent, S256 PKCE, scoped tokens, rotation, and revocation.
-- Atomic batches, stable request IDs, optimistic revisions, duplicate-project review, and human confirmation.
+- Atomic batches, stable request IDs, optimistic revisions, duplicate-project creation review, and web confirmation for manual proposals/undo.
 - Browser reconciliation of stale proposals: preserve applied fields, choose conflicts, generate a fresh pending proposal, then confirm separately.
 - Audit snapshots and conflict-aware undo. Undo never silently overwrites a newer record or leaves dangling references.
 - Explicit, read-only GitHub Actions refresh with last-successful cache and clear failure states. CI success never changes release or environment state.
-- A real local Streamable HTTP MCP endpoint, tested using the official MCP client SDK. New records can save directly; edits/deletes are proposals that only the web user can approve.
+- A real local Streamable HTTP MCP endpoint, tested using the official MCP client SDK. Authorized additions, edits and recoverable deletes apply directly, including mixed batches; creating a possible duplicate project still requires web review.
 - SQLite persistence, an online backup command, automated tests, and browser workflow checks.
 
 ## Requirements
@@ -90,7 +90,7 @@ After a failed update caused by incorrect environment settings, fix .env and run
 
 ## MCP and ChatGPT
 
-The implemented endpoint is http://127.0.0.1:4310/mcp with an Authorization: Bearer token header. It exposes read tools, idempotent batch submission, and request-status lookup. It intentionally exposes no approval tool.
+The implemented endpoint is http://127.0.0.1:4310/mcp with an Authorization: Bearer token header. It exposes read tools, idempotent direct batch writes, and request-status lookup. MCP edits/deletes no longer require human confirmation. Existing hub:propose OAuth grants now permit direct edits/deletes. Historical pending requests retain their stored outcome; clients can read current records and submit a fresh batch. No approval tool is needed for new edits/deletes. Client applications may still apply their own tool-confirmation policies.
 
 See [MCP guide](docs/mcp.md) for contracts and examples.
 

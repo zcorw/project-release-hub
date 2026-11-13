@@ -67,7 +67,7 @@ function Auth({
             让个人项目的每一步清晰可见。
           </p>
           <div className="auth-line" />
-          <small>本地工作空间 · 人工确认变更 · 完整历史记录</small>
+          <small>个人工作空间 · MCP 自动管理 · 完整历史记录</small>
         </div>
       </section>
       <main className="auth-main">
@@ -463,7 +463,7 @@ function App() {
                 : page === 'overview'
                   ? '从具体功能到版本发布，让每一步进展清晰可见。'
                   : page === 'pending'
-                    ? '检查变更详情，确认后才会写入。MCP 只能提出变更，不能代你批准。'
+                    ? '这里保留网页提案、疑似重复的新项目和历史待确认请求。MCP 修改、删除可在授权范围内直接生效。'
                     : '查看每一次数据变更，以及应用前后的完整记录。'}
             </p>
           </div>
@@ -871,7 +871,7 @@ function App() {
           <section>
             {pending.length === 0 && !loading ? (
               <Empty title="没有待确认的变更">
-                <p>需要你确认的编辑、删除、撤销和重复项目会显示在这里。</p>
+                <p>网页提案、撤销、疑似重复的新项目和历史待确认请求会显示在这里。</p>
               </Empty>
             ) : (
               <div className="review-list">

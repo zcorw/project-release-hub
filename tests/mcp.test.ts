@@ -45,7 +45,7 @@ afterEach(async () => {
   repository.close();
 });
 describe('MCP Streamable HTTP boundary', () => {
-  it('lists only bounded read and proposal tools, never approval tools', async () => {
+  it('lists bounded read/write tools and advertises destructive writes honestly', async () => {
     const tools = await client.listTools();
     expect(tools.tools.map((t) => t.name).sort()).toEqual([
       'hub_get_request',
@@ -53,8 +53,13 @@ describe('MCP Streamable HTTP boundary', () => {
       'hub_list_pending',
       'hub_submit_batch',
     ]);
+    expect(tools.tools.find((t) => t.name === 'hub_submit_batch')?.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+    });
   });
-  it('applies idempotent additions and reports updates as pending', async () => {
+  it('applies and replays additions, updates and deletes without web confirmation', async () => {
     const input = {
       requestId: randomUUID(),
       operations: [{ action: 'create', entity: { kind: 'project', name: 'MCP sample' } }],
@@ -66,38 +71,126 @@ describe('MCP Streamable HTTP boundary', () => {
     await client.callTool({ name: 'hub_submit_batch', arguments: input });
     expect(repository.list()).toHaveLength(1);
     const project = repository.list()[0];
-    const edit = await client.callTool({
-      name: 'hub_submit_batch',
-      arguments: {
-        requestId: randomUUID(),
-        operations: [
-          {
-            action: 'update',
-            id: project.id,
-            expectedRevision: 1,
-            entity: { ...entityData(project), description: 'Proposed by MCP' },
-          },
-        ],
-      },
+    const editInput = {
+      requestId: randomUUID(),
+      operations: [
+        {
+          action: 'update',
+          id: project.id,
+          expectedRevision: 1,
+          entity: { ...entityData(project), description: 'Applied by MCP' },
+        },
+      ],
+    };
+    const edit = await client.callTool({ name: 'hub_submit_batch', arguments: editInput });
+    const applied = (edit.structuredContent as { request: ChangeRequest }).request;
+    expect(applied.status).toBe('applied');
+    expect(repository.get(project.id)!.entity).toMatchObject({
+      description: 'Applied by MCP',
+      revision: 2,
     });
-    const pending = (edit.structuredContent as { request: ChangeRequest }).request;
-    expect(pending.status).toBe('pending');
-    expect(repository.get(project.id)!.entity).toEqual(project);
+    expect(repository.auditEvent(applied.result!.auditId)).toMatchObject({
+      actor: 'mcp-client',
+      source: 'mcp',
+      confirmedBy: null,
+      changes: [{ before: project, afterRevision: 2 }],
+    });
+    expect(
+      (await client.callTool({ name: 'hub_submit_batch', arguments: editInput })).structuredContent,
+    ).toEqual(edit.structuredContent);
     expect(
       (
         await request(app)
-          .post('/api/changes/' + pending.id + '/confirm')
+          .post('/api/changes/' + applied.id + '/confirm')
           .set('Authorization', `Bearer ${token}`)
           .send({})
       ).status,
     ).toBe(401);
     const read = await client.callTool({
       name: 'hub_get_request',
-      arguments: { requestId: pending.id },
+      arguments: { requestId: applied.id },
     });
-    expect((read.structuredContent as { request: ChangeRequest }).request.status).toBe('pending');
+    expect((read.structuredContent as { request: ChangeRequest }).request.status).toBe('applied');
+    const deleteInput = {
+      requestId: randomUUID(),
+      operations: [{ action: 'delete', id: project.id, expectedRevision: 2 }],
+    };
+    const deleted = await client.callTool({ name: 'hub_submit_batch', arguments: deleteInput });
+    expect((deleted.structuredContent as { request: ChangeRequest }).request.status).toBe(
+      'applied',
+    );
+    expect(repository.get(project.id)).toMatchObject({ deleted: true, entity: { revision: 3 } });
+    expect(
+      (await client.callTool({ name: 'hub_submit_batch', arguments: deleteInput }))
+        .structuredContent,
+    ).toEqual(deleted.structuredContent);
+    expect(repository.history()).toHaveLength(3);
+    const conflict = await client.callTool({
+      name: 'hub_submit_batch',
+      arguments: { ...deleteInput, operations: editInput.operations },
+    });
+    expect(conflict.structuredContent).toMatchObject({ error: { code: 'IDEMPOTENCY_CONFLICT' } });
     const list = await client.callTool({ name: 'hub_list_pending', arguments: {} });
-    expect((list.structuredContent as { total: number }).total).toBe(1);
+    expect((list.structuredContent as { total: number }).total).toBe(0);
+  });
+  it('applies mixed batches and rejects stale revisions or dangling deletes atomically', async () => {
+    const project = hub.submit(
+      {
+        requestId: randomUUID(),
+        operations: [{ action: 'create', entity: { kind: 'project', name: 'Mixed batch' } }],
+      },
+      'mcp',
+    ).result!.entities[0];
+    const task = hub.submit(
+      {
+        requestId: randomUUID(),
+        operations: [
+          { action: 'create', entity: { kind: 'task', projectId: project.id, title: 'Old task' } },
+        ],
+      },
+      'mcp',
+    ).result!.entities[0];
+    const input = {
+      requestId: randomUUID(),
+      operations: [
+        { action: 'create', entity: { kind: 'issue', projectId: project.id, title: 'New issue' } },
+        {
+          action: 'update',
+          id: project.id,
+          expectedRevision: 1,
+          entity: { ...entityData(project), description: 'Mixed update' },
+        },
+        { action: 'delete', id: task.id, expectedRevision: 1 },
+      ],
+    };
+    const result = await client.callTool({ name: 'hub_submit_batch', arguments: input });
+    const change = (result.structuredContent as { request: ChangeRequest }).request;
+    expect(change.status).toBe('applied');
+    expect(repository.auditEvent(change.result!.auditId)?.changes).toHaveLength(3);
+    expect(
+      repository
+        .list()
+        .map((e) => e.kind)
+        .sort(),
+    ).toEqual(['issue', 'project']);
+    for (const [operation, code] of [
+      [input.operations[1], 'REVISION_CONFLICT'],
+      [{ action: 'delete', id: project.id, expectedRevision: 2 }, 'INVALID_REFERENCE'],
+    ] as const) {
+      const snapshot = hub.snapshot();
+      const failed = await client.callTool({
+        name: 'hub_submit_batch',
+        arguments: {
+          requestId: randomUUID(),
+          operations: [
+            { action: 'create', entity: { kind: 'project', name: 'Must roll back' } },
+            operation,
+          ],
+        },
+      });
+      expect(failed.structuredContent).toMatchObject({ error: { code } });
+      expect(hub.snapshot()).toEqual(snapshot);
+    }
   });
   it('requires duplicate project clarification and never silently creates it', async () => {
     const call = () =>

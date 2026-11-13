@@ -257,7 +257,7 @@ export function AccountSettings({
               <h3>MCP 应用授权</h3>
               <p className="muted">
                 {auth.oauthEnabled
-                  ? 'OAuth 已启用。授权只允许 MCP 范围内操作，重要变更仍需网页确认。'
+                  ? 'OAuth 已启用。MCP 可在授权范围内直接修改、删除记录，无需逐次网页确认。'
                   : '当前服务器未启用远程 OAuth。'}
               </p>
               {auth.publicUrl && <p className="account-url">服务地址：{auth.publicUrl}</p>}

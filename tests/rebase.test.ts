@@ -27,7 +27,7 @@ function update(base: Entity, fields: Record<string, string>, extra: unknown[] =
       },
       ...extra,
     ]),
-    'mcp',
+    'web',
   );
 }
 function rebase(
@@ -205,7 +205,7 @@ describe('proposal reconciliation', () => {
   it('asks again before deleting an edited target and stages deletion against its latest revision', () => {
     const source = hub.submit(
       batch([{ action: 'delete', id: project.id, expectedRevision: 1 }]),
-      'mcp',
+      'web',
     );
     hub.confirm(update(project, { description: 'Applied' }).id);
     expect(hub.previewRebase(source.id).items[0].conflicts).toEqual(['$delete']);
@@ -226,7 +226,7 @@ describe('proposal reconciliation', () => {
   it('keeps create-only remainders pending when a conflicting deletion is retained', () => {
     const source = hub.submit(
       batch([{ action: 'delete', id: project.id, expectedRevision: 1 }, create()]),
-      'mcp',
+      'web',
     );
     hub.confirm(update(project, { description: 'Applied' }).id);
     const replacement = rebase(source, [{ id: project.id, field: '$delete', choice: 'current' }]);

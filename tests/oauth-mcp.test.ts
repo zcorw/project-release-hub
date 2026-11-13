@@ -6,6 +6,7 @@ import request, { type Test } from 'supertest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Repository } from '../server/infrastructure/database';
+import { HubService } from '../server/application/hub';
 import { createApp } from '../server/http/app';
 import { hashPassword } from '../server/http/auth';
 import { entityData, type ChangeRequest } from '../shared/schema';
@@ -194,7 +195,7 @@ describe('final app OAuth and MCP integration', () => {
     expect(result.structuredContent).toMatchObject({ error: { code: 'INSUFFICIENT_SCOPE' } });
     expect(repository.list()).toHaveLength(0);
   });
-  it('applies creates while edits/deletes stay pending and bearer cannot confirm', async () => {
+  it('applies OAuth creates/edits/deletes directly while bearer cannot access web confirmation', async () => {
     const grant = await authorize(),
       client = await sdk(grant.access);
     const created = await client.callTool({
@@ -213,16 +214,21 @@ describe('final app OAuth and MCP integration', () => {
         action: 'update',
         id: entity.id,
         expectedRevision: entity.revision,
-        entity: { ...entityData(entity), description: 'Proposal only' },
+        entity: { ...entityData(entity), description: 'Direct OAuth update' },
       },
-      { action: 'delete', id: entity.id, expectedRevision: entity.revision },
+      { action: 'delete', id: entity.id, expectedRevision: entity.revision + 1 },
     ]) {
       const proposed = await client.callTool({
         name: 'hub_submit_batch',
         arguments: { requestId: randomUUID(), operations: [operation] },
       });
       const change = (proposed.structuredContent as { request: ChangeRequest }).request;
-      expect(change.status).toBe('pending');
+      expect(change.status).toBe('applied');
+      expect(repository.auditEvent(change.result!.auditId)).toMatchObject({
+        source: 'mcp',
+        actor: 'mcp-client',
+        confirmedBy: null,
+      });
       expect(
         (
           await proxy(request(app).post(`/api/changes/${change.id}/confirm`))
@@ -231,10 +237,10 @@ describe('final app OAuth and MCP integration', () => {
         ).status,
       ).toBe(401);
     }
-    expect(repository.get(entity.id)?.entity).toEqual(entity);
-    expect(repository.requests().filter((r) => r.status === 'pending')).toHaveLength(2);
+    expect(repository.get(entity.id)).toMatchObject({ deleted: true, entity: { revision: 3 } });
+    expect(repository.requests().filter((r) => r.status === 'pending')).toHaveLength(0);
   });
-  it('rejects ungranted proposals and reads for a create-only grant', async () => {
+  it('rejects ungranted updates/deletes and mixed batches for a create-only grant', async () => {
     const grant = await authorize('hub:create'),
       client = await sdk(grant.access);
     const created = await client.callTool({
@@ -253,11 +259,72 @@ describe('final app OAuth and MCP integration', () => {
       name: 'hub_submit_batch',
       arguments: {
         requestId: randomUUID(),
-        operations: [{ action: 'delete', id: entity.id, expectedRevision: 1 }],
+        operations: [
+          { action: 'create', entity: { kind: 'task', projectId: entity.id, title: 'Blocked' } },
+          { action: 'delete', id: entity.id, expectedRevision: 1 },
+        ],
       },
     });
     expect(denied.structuredContent).toMatchObject({ error: { code: 'INSUFFICIENT_SCOPE' } });
+    const update = await client.callTool({
+      name: 'hub_submit_batch',
+      arguments: {
+        requestId: randomUUID(),
+        operations: [
+          {
+            action: 'update',
+            id: entity.id,
+            expectedRevision: 1,
+            entity: { ...entityData(entity), description: 'Blocked' },
+          },
+        ],
+      },
+    });
+    expect(update.structuredContent).toMatchObject({ error: { code: 'INSUFFICIENT_SCOPE' } });
+    expect(repository.list()).toEqual([entity]);
+    expect(repository.history()).toHaveLength(1);
     expect(repository.requests().filter((r) => r.status === 'pending')).toHaveLength(0);
+  });
+  it('retains direct-edit scope compatibility without allowing ungranted creates in mixed batches', async () => {
+    const entity = new HubService(repository).submit(
+      {
+        requestId: randomUUID(),
+        operations: [{ action: 'create', entity: { kind: 'project', name: 'Scoped update' } }],
+      },
+      'web',
+    ).result!.entities[0];
+    const grant = await authorize('hub:propose'),
+      client = await sdk(grant.access);
+    const operation = {
+      action: 'update',
+      id: entity.id,
+      expectedRevision: 1,
+      entity: { ...entityData(entity), description: 'Direct scope' },
+    };
+    const denied = await client.callTool({
+      name: 'hub_submit_batch',
+      arguments: {
+        requestId: randomUUID(),
+        operations: [
+          operation,
+          { action: 'create', entity: { kind: 'task', projectId: entity.id, title: 'Blocked' } },
+        ],
+      },
+    });
+    expect(denied.structuredContent).toMatchObject({ error: { code: 'INSUFFICIENT_SCOPE' } });
+    expect(repository.list()).toEqual([entity]);
+    const result = await client.callTool({
+      name: 'hub_submit_batch',
+      arguments: {
+        requestId: randomUUID(),
+        operations: [operation],
+      },
+    });
+    expect(result.structuredContent).toMatchObject({ request: { status: 'applied' } });
+    expect(repository.get(entity.id)?.entity).toMatchObject({
+      revision: 2,
+      description: 'Direct scope',
+    });
   });
   it('revokes OAuth through the actual authenticated account UI endpoint', async () => {
     const grant = await authorize();

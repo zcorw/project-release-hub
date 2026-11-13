@@ -9,7 +9,7 @@ Zhixu (知序), originally Project Release Hub, manages personal software projec
 - Home-page feature and environment summaries.
 - Explicit, read-only GitHub Actions refresh.
 - ChatGPT performs repository analysis; this application stores structured results.
-- Direct new-record writes, project duplicate clarification, human-confirmed edits/deletes, audit, and undo.
+- Direct MCP additions/edits/deletes, duplicate-project creation clarification, web-confirmed manual edits/deletes, audit, and undo. The 2026-11-13 instruction supersedes the original MCP confirmation requirement.
 - SQLite for the first version.
 - Reuse existing form validation components.
 - Chinese UI/conversation and English engineering documentation/comments.
@@ -47,3 +47,7 @@ The user requested a short command to create the initial administrator inside th
 ## Stale proposal reconciliation follow-up
 
 The user requested rebasing stale proposals onto latest records while preserving applied changes, choosing conflicts and retaining final web confirmation. The implementation uses field-level three-way comparison, historical-base recovery, snapshot-bound previews and atomic linked pending replacements. Generating a replacement never applies records, including create-only remainders. Missing bases/deleted targets block reconciliation; text is resolved as a whole field. See proposal-rebase-plan.md for decisions, operator steps and verification. After verification, the user authorized a separate source commit and normal push on the existing working branch; no merge, image publication or deployment is included.
+
+## Direct MCP edits and deletes follow-up
+
+The user requested removing mandatory human participation for MCP updates/deletes. New authorized MCP batches apply directly, including mixed creates/updates/deletes, while retaining validation, scopes, revisions, atomicity, replay, audit and recoverable deletion. Duplicate clarification gates only newly created projects; existing-project edits are not blocked by similarity. hub:propose retains its identifier and now authorizes direct edits/deletes for existing grants. Web proposals, reconciliation replacements, undo and historical pending requests retain their review behavior. See mcp-direct-writes-plan.md for the superseding decisions. After verification, the user authorized a separate source commit and normal push on the existing working branch. No image publication or deployment is included.

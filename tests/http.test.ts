@@ -152,7 +152,7 @@ describe('local authentication and HTTP writes', () => {
           },
         ],
       },
-      'mcp',
+      'web',
     );
     const path = '/api/changes/' + source.id + '/rebase';
     expect((await request(app).get(path)).status).toBe(401);

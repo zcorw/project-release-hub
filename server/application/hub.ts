@@ -59,8 +59,16 @@ export class HubService {
         duplicates,
         baseEntities: this.bases(plan),
       };
-      if (operations.every((op) => op.action === 'create') && duplicates.length === 0)
-        this.apply(request, plan);
+      const createdProjects = new Set(
+        operations.flatMap((op) =>
+          op.action === 'create' && op.entity.kind === 'project' ? [op.id!] : [],
+        ),
+      );
+      const needsReview =
+        source === 'mcp'
+          ? duplicates.some((candidate) => createdProjects.has(candidate.proposedId))
+          : operations.some((op) => op.action !== 'create') || duplicates.length > 0;
+      if (!needsReview) this.apply(request, plan);
       this.repository.saveRequest(request, fingerprint);
       return request;
     });
