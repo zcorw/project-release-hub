@@ -90,14 +90,14 @@ Access tokens last 10 minutes; refresh tokens last 7 days and rotate on refresh.
 
 Single-owner capacity guards: 1,000 clients, 1,000 live consent intents and 20,000 credential rows. Capacity returns temporarily_unavailable rather than growing indefinitely. Cleanup removes expired intents and expired/used access rows. Consumed code/refresh replay evidence remains until no usable family descendants exist. Unreferenced unused registrations older than 30 days may be removed. Client usage timestamps are updated on successful access-token verification.
 
-## MCP scopes and human approval
+## MCP scopes and direct writes
 
 - hub:read: list records, submitted-request outcomes and pending proposals.
 - hub:create: submit additions; duplicate-project review remains.
-- hub:propose: submit updates/deletes as pending proposals.
+- hub:propose: directly apply updates/deletes without per-batch human confirmation. The legacy identifier is retained for compatibility; existing grants gain this behavior under the owner's 2026-11-13 instruction.
 - Mixed batches require every corresponding scope.
 
-No scope grants web account access, approval, rejection or undo. A bearer token cannot replace a web session/CSRF on web routes. MCP exposes no approval tool. Creates apply only under existing validation/duplicate rules; batches with updates/deletes remain pending until the owner approves the exact proposal in the web UI. Revisions, idempotency and business audit remain enforced.
+No scope grants web account access, approval, rejection or undo. A bearer token cannot replace a web session/CSRF on web routes. MCP exposes no approval tool: valid authorized additions/edits/deletes apply atomically on submission. Creating a possible duplicate project still keeps the entire batch pending; similarity does not block MCP updates to existing projects. Revisions, references, idempotency and business audit remain enforced. Manual web proposals, reconciliation replacements, undo and historical pending requests retain web review. Consent/account text describes direct writes; initial OAuth consent and revocation remain. Clients may independently require tool confirmation, and hub_submit_batch now advertises destructiveHint=true.
 
 ## ChatGPT and verification limits
 

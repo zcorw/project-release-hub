@@ -14,7 +14,7 @@ UUID identifiers; camelCase JSON; UTC ISO timestamps. Validate inputs before per
 
 ## Write safety
 
-Additions save directly except project duplicates. Updates/deletes and undo require authenticated web confirmation. MCP may propose changes, never approve them. Audit every applied mutation. Undo refuses to overwrite newer revisions or break references. Keep feature completion, CI success, and release/deployment state separate.
+Additions save directly except project duplicates. Authorized MCP updates/deletes apply directly, including mixed batches; duplicate clarification gates only newly created projects in MCP batches. Manual web updates/deletes, reconciliation replacements and undo require authenticated web confirmation. Historical pending requests retain their stored outcome. Audit every applied mutation and do not attribute automatic MCP writes to a human confirmer. Undo refuses to overwrite newer revisions or break references. Keep feature completion, CI success, and release/deployment state separate. See mcp-direct-writes-plan.md for the superseding decision and scope compatibility.
 
 ## Frontend
 

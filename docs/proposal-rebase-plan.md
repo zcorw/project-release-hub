@@ -2,6 +2,8 @@
 
 Date: 2026-11-12.
 
+Follow-up on 2026-11-13: new authorized MCP edits/deletes now apply directly under mcp-direct-writes-plan.md. This guide continues to apply to manual web proposals and historical pending requests; reconciliation replacements still require separate web confirmation.
+
 ## Confirmed request
 
 The user requested rebasing stale proposals onto the latest records, preserving already applied changes, choosing conflicts in the browser, and retaining separate web confirmation before application. This authorizes local implementation and verification, not commit, push or deployment.

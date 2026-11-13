@@ -21,7 +21,7 @@ function update(base: Entity, fields: Record<string, string>) {
         },
       ],
     },
-    'mcp',
+    'web',
   );
 }
 test.beforeEach(async () => {
@@ -189,7 +189,7 @@ test('edited deletion targets require a choice and retained deletes leave additi
         { action: 'create', entity: { kind: 'project', name: '新建记录' } },
       ],
     },
-    'mcp',
+    'web',
   );
   hub.confirm(update(project, { description: '删除提案后的新内容' }).id);
   await openProposal(page, source.id);
@@ -213,7 +213,7 @@ test('missing targets and historical bases show blockers without crashing the re
       requestId: randomUUID(),
       operations: [{ action: 'delete', id: project.id, expectedRevision: 1 }],
     },
-    'mcp',
+    'web',
   );
   const legacy = repository.request(source.id)!;
   delete legacy.request.baseEntities;

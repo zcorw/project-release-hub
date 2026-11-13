@@ -15,7 +15,7 @@ Build a local-first web MVP for personal project features, concrete development 
 
 ## Key Requirements
 
-Concrete feature plans, single-environment project summaries, manually refreshed read-only GitHub Actions, direct MCP additions, duplicate clarification, human-confirmed edits/deletes, audit, undo, SQLite, and English engineering documentation.
+Concrete feature plans, single-environment project summaries, manually refreshed read-only GitHub Actions, direct MCP additions/edits/deletes, duplicate-project creation clarification, web-confirmed manual edits/deletes, audit, undo, SQLite, and English engineering documentation. T017 supersedes the original MCP confirmation requirement.
 
 ## Questions / Assumptions
 
@@ -134,3 +134,11 @@ Execute T001 through T007 in order, reviewing one task at a time. T005 and T006 
       Modules: shared contracts, application/domain service, SQLite history lookup, HTTP, web, tests and docs.
       Verify: Three-way merge, legacy bases, deletions, atomicity, concurrent changes, idempotency, web-only security and affected browser flows; aggregate checks and diff review.
       Publication: Source commit/push authorized after verification on the existing working branch; no merge, image publication or deployment requested.
+
+## Direct MCP edits and deletes
+
+- [x] T017 [P0] Apply authorized MCP edits/deletes without human confirmation
+      Goal: Apply valid MCP batches directly while preserving shared validation, revisions, atomicity, scopes, replay and audit; retain web confirmation for manual proposals and undo.
+      Modules: shared application service, MCP, OAuth consent/account text, tests and docs.
+      Verify: Local-token/OAuth SDK mutation flows, mixed-batch permissions/rollback, duplicate creation, legacy pending requests, web confirmation/reconciliation and browser visibility/history/undo; aggregate checks and diff review.
+      Publication: After verification, the user authorized a separate source commit and normal push on the existing working branch. No image publication, deployment or persistent external access requested. See docs/mcp-direct-writes-plan.md.

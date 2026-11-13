@@ -135,3 +135,15 @@ Date: 2026-11-12. Decisions and user steps are recorded in proposal-rebase-plan.
 - The initial sandboxed aggregate check could not connect to temporary localhost services (EACCES); rerunning with local network access passed. Browser tests used a fresh temporary workspace database plus separate in-memory reconciliation databases. No normal user database or operator .env was read.
 
 Text conflicts are whole-field selections. Unavailable historical bases/deleted targets block automatic reconciliation; combined invalid dates or references prevent generation without changing the original request. Container smoke was not rerun for this application-only feature. No source commit/push, image publication or live deployment was requested or performed.
+
+## Direct MCP edits and deletes
+
+Date: 2026-11-13. The owner's instruction supersedes per-batch MCP human confirmation. See mcp-direct-writes-plan.md for scope and compatibility decisions.
+
+- npm run check passed formatting, strict TypeScript, all 136 tests across 12 files and production build.
+- Official-SDK local-token and OAuth integration verifies immediate updates/deletes, mixed-batch atomic writes, replay/status, destructiveHint=true and no fabricated human confirmer. Scope-denied mixed requests, stale revisions and reference errors leave data/history unchanged.
+- Service regressions verify informational existing-project duplicates versus pending duplicate creations, historical pending MCP replay/reconciliation and rollback of entities/audit/request when request persistence fails. Existing web confirmation, undo and reconciliation tests remain green with web proposal fixtures.
+- npm run test:e2e passed all 12 Chrome scenarios. The new SDK/browser flow checks direct create/update/delete, refreshed task display, no pending request, MCP history and web-confirmed undo. Updated OAuth consent/account text and existing web/account/reconciliation flows passed.
+- The initial sandboxed targeted HTTP tests hit localhost EACCES; the rerun with local network access passed. Tests used temporary/in-memory databases. Final diff and whitespace review passed.
+
+Existing hub:propose grants now permit direct edits/deletes. Historical pending requests are not automatically applied. Browser/manual proposals and undo still require web confirmation; new duplicate-project creation still keeps a whole batch pending. Clients may independently require tool confirmation. Container smoke and live client connection were not rerun; no commit/push, image publication, deployment or persistent external access was performed.

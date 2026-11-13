@@ -59,6 +59,9 @@ test('real OAuth browser login, consent denial/allow, callback redirect and toke
     await page.getByRole('button', { name: '进入工作空间', exact: true }).click();
     await expect(page.getByRole('heading', { name: '授权 MCP 应用', exact: true })).toBeVisible();
     await expect(page.getByText('Isolated browser client', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('hub:propose：直接修改或删除记录，无需逐次网页确认', { exact: true }),
+    ).toBeVisible();
     await page.getByRole('button', { name: '拒绝', exact: true }).click();
     await expect(page).toHaveURL(
       new RegExp('^' + callbackUrl.replace(/[.*+?^$()|[\]\\]/g, '\\$&')),
@@ -88,6 +91,15 @@ test('real OAuth browser login, consent denial/allow, callback redirect and toke
     expect(
       JSON.stringify(repository.db.prepare('SELECT data FROM oauth_credentials').all()),
     ).not.toContain(credentials.access_token);
+    await page.goto(base);
+    await page.getByRole('button', { name: '账户与安全', exact: true }).click();
+    await expect(
+      page
+        .getByRole('dialog')
+        .getByText('OAuth 已启用。MCP 可在授权范围内直接修改、删除记录，无需逐次网页确认。', {
+          exact: true,
+        }),
+    ).toBeVisible();
   } finally {
     await stop(backend);
     await stop(callback);

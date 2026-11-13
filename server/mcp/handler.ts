@@ -86,11 +86,11 @@ export function createMcpServer(
     'hub_submit_batch',
     {
       description:
-        'Submit 1-20 atomic operations using a stable UUID requestId. Reuse the exact input and requestId after an uncertain result. Creates save immediately unless a possible duplicate project needs clarification. Updates/deletes always remain pending until a human approves the exact proposal in the authenticated web UI. Never claim a pending operation was applied. Never approve changes on behalf of the human. For updates, read the current revision first and send all entity fields. Optional explicit create IDs support related records in the same batch.',
+        'Submit 1-20 atomic operations using a stable UUID requestId. Authorized creates, updates and recoverable deletes apply immediately, including mixed batches, without web confirmation. Creating a possible duplicate project keeps the whole batch pending for web review. Never claim a pending request was applied. Read current records before editing/deleting, use expectedRevision, and send all entity fields for updates. Revision/reference errors apply nothing; read current state and submit corrected operations with a new requestId. After an uncertain result, use hub_get_request and reuse the exact input and requestId. Optional explicit create IDs support related records in the same batch. OAuth requires hub:create for creates and hub:propose for direct updates/deletes.',
       inputSchema: batchSchema,
       annotations: {
         readOnlyHint: false,
-        destructiveHint: false,
+        destructiveHint: true,
         idempotentHint: true,
         openWorldHint: false,
       },
@@ -106,7 +106,7 @@ export function createMcpServer(
     'hub_get_request',
     {
       description:
-        'Read the outcome of a previously submitted request before retrying. Applied means saved; pending means human review is still required; rejected means it was not applied.',
+        'Read the outcome of a previously submitted request before retrying. Applied means saved; pending means web review is required (duplicate project creation, web proposals or historical requests); rejected means it was not applied. Historical pending requests are not automatically executed under the direct-write policy.',
       inputSchema: { requestId: z.uuid() },
       annotations: {
         readOnlyHint: true,
@@ -125,7 +125,7 @@ export function createMcpServer(
     'hub_list_pending',
     {
       description:
-        'Read pending proposals. Approval and rejection are deliberately unavailable to MCP clients and must be performed by the user in the web interface.',
+        'Read pending duplicate-project creations, web proposals and historical requests. New authorized updates/deletes apply directly. Pending requests retain web review; MCP exposes no approval, rejection, reconciliation or undo tool.',
       inputSchema: {
         offset: z.number().int().min(0).default(0),
         limit: z.number().int().min(1).max(50).default(20),

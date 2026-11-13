@@ -49,11 +49,11 @@ describe('shared mutation safety', () => {
     expect(hub.snapshot().entities).toHaveLength(2);
     expect(hub.confirm(request.id).status).toBe('applied');
   });
-  it('does not modify or delete records before confirmation and supports rejection', () => {
+  it('keeps manual web deletion pending and supports rejection', () => {
     const p = project();
     const request = hub.submit(
       batch([{ action: 'delete', id: p.id, expectedRevision: p.revision }]),
-      'mcp',
+      'web',
     );
     expect(hub.snapshot().entities).toHaveLength(1);
     hub.reject(request.id);
@@ -68,7 +68,7 @@ describe('shared mutation safety', () => {
       expectedRevision: p.revision,
       entity: { ...entityData(p), description: 'first' },
     };
-    const first = hub.submit(batch([operation]), 'mcp'),
+    const first = hub.submit(batch([operation]), 'web'),
       second = hub.submit(
         batch([{ ...operation, entity: { ...operation.entity, description: 'second' } }]),
         'web',
@@ -199,7 +199,7 @@ it('keeps older pending requests visible after more than 100 later requests', ()
         entity: { ...entityData(p), description: 'Pending' },
       },
     ]),
-    'mcp',
+    'web',
   );
   for (let i = 0; i < 105; i++) hub.submit(batch([create(randomUUID())]), 'web');
   expect(
@@ -224,6 +224,84 @@ it('records the initiating actor and human confirmation separately', () => {
     ]),
     'mcp',
   );
-  const applied = hub.confirm(edit.id);
+  expect(edit.status).toBe('applied');
+  expect(repository.auditEvent(edit.result!.auditId)?.confirmedBy).toBeNull();
+  const manual = hub.submit(batch([{ action: 'delete', id: p.id, expectedRevision: 2 }]), 'web');
+  const applied = hub.confirm(manual.id);
   expect(repository.auditEvent(applied.result!.auditId)?.confirmedBy).toBe('local-user');
+});
+
+it('does not block MCP edits to existing similar projects but reviews new duplicate projects atomically', () => {
+  const first = project();
+  const duplicate = hub.submit(batch([create()]), 'web');
+  const second = hub.confirm(duplicate.id).result!.entities[0];
+  const edit = {
+    action: 'update',
+    id: first.id,
+    expectedRevision: 1,
+    entity: { ...entityData(first), description: 'Automatic' },
+  };
+  const applied = hub.submit(batch([edit]), 'mcp');
+  expect(applied.status).toBe('applied');
+  expect(applied.duplicates.length).toBeGreaterThan(0);
+  const before = hub.snapshot().entities;
+  const pending = hub.submit(
+    batch([
+      create(),
+      { action: 'delete', id: second.id, expectedRevision: 1 },
+      { ...edit, expectedRevision: 2 },
+    ]),
+    'mcp',
+  );
+  expect(pending.status).toBe('pending');
+  expect(hub.snapshot().entities).toEqual(before);
+});
+
+it('replays historical pending MCP requests without applying them and keeps reconciliation available', () => {
+  const p = project();
+  const input = batch([
+    {
+      action: 'update',
+      id: p.id,
+      expectedRevision: 1,
+      entity: { ...entityData(p), description: 'Legacy proposal' },
+    },
+  ]);
+  const pending = hub.submit(input, 'web');
+  // Model the pre-policy persisted shape without submitting through the new MCP path.
+  const stored = repository.request(pending.id)!;
+  stored.request.source = 'mcp';
+  repository.saveRequest(stored.request, stored.hash);
+  expect(hub.submit(input, 'mcp')).toMatchObject({ status: 'pending', source: 'mcp' });
+  expect(repository.get(p.id)?.entity).toEqual(p);
+  const preview = hub.previewRebase(pending.id);
+  const replacement = hub.rebase(pending.id, {
+    requestId: randomUUID(),
+    previewToken: preview.token,
+    resolutions: [],
+  });
+  expect(replacement).toMatchObject({ status: 'pending', source: 'web' });
+  expect(repository.get(p.id)?.entity).toEqual(p);
+});
+
+it('rolls back direct MCP entities, audit and request when persistence fails', () => {
+  const p = project();
+  const before = hub.snapshot();
+  repository.db.exec(`CREATE TRIGGER fail_request BEFORE INSERT ON requests
+    BEGIN SELECT RAISE(ABORT, 'simulated persistence failure'); END`);
+  expect(() =>
+    hub.submit(
+      batch([
+        {
+          action: 'update',
+          id: p.id,
+          expectedRevision: 1,
+          entity: { ...entityData(p), description: 'Must roll back' },
+        },
+        { action: 'create', entity: { kind: 'task', projectId: p.id, title: 'Also rolled back' } },
+      ]),
+      'mcp',
+    ),
+  ).toThrow('simulated persistence failure');
+  expect(hub.snapshot()).toEqual(before);
 });
