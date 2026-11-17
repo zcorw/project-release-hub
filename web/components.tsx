@@ -5,12 +5,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   entityDataSchema,
+  withDeliveryDefaults,
   entityData,
   entityLabel,
   projectStatuses,
   environmentStatuses,
   featureStatuses,
   taskStatuses,
+  developmentStatuses,
+  githubStatuses,
   issueStatuses,
   releaseStatuses,
   priorities,
@@ -38,6 +41,14 @@ export const labels: Record<string, string> = {
   revision: '修订号',
   createdAt: '创建时间',
   updatedAt: '更新时间',
+  developmentStatus: '开发验证状态',
+  githubStatus: 'GitHub 提交状态',
+  unknown: '待核实',
+  not_developed: '未开发',
+  unverified: '未验证',
+  verified: '已验证',
+  not_submitted: '未提交',
+  submitted: '已提交',
   projectId: '所属项目',
   name: '项目名称',
   title: '标题',
@@ -193,6 +204,9 @@ export function EntityForm({
                 : {
                     title: '',
                     priority: 'P2',
+                    ...(kind === 'task' || kind === 'issue'
+                      ? { developmentStatus: 'not_developed', githubStatus: 'not_submitted' }
+                      : {}),
                     status: kind === 'feature' ? 'backlog' : kind === 'task' ? 'todo' : 'open',
                   }),
             }),
@@ -242,6 +256,20 @@ export function EntityForm({
                     : issueStatuses,
             },
             { name: 'priority', options: priorities },
+            ...(kind === 'task' || kind === 'issue'
+              ? ([
+                  {
+                    name: 'developmentStatus',
+                    options: developmentStatuses,
+                    hint: '未验证表示已有实现但尚未完成所需验证；请在说明中记录验证范围和结果。',
+                  },
+                  {
+                    name: 'githubStatus',
+                    options: githubStatuses,
+                    hint: '已提交指已推送到 GitHub，不代表已合并或部署；请在说明中附提交或 PR 链接。',
+                  },
+                ] as Field[])
+              : []),
             ...(kind === 'feature'
               ? ([
                   {
@@ -359,7 +387,7 @@ export function RecordDetails({
   if (!entity) return <p className="muted">无记录</p>;
   return (
     <dl className="details">
-      {Object.entries(entity)
+      {Object.entries(withDeliveryDefaults(entity))
         .filter(([key]) => !['createdAt', 'updatedAt'].includes(key))
         .map(([key, value]) => (
           <div key={key}>
@@ -371,7 +399,13 @@ export function RecordDetails({
                   : String(value || '未设置')
                 : String(value) === ''
                   ? '未设置'
-                  : ['kind', 'status', 'environmentStatus'].includes(key)
+                  : [
+                        'kind',
+                        'status',
+                        'environmentStatus',
+                        'developmentStatus',
+                        'githubStatus',
+                      ].includes(key)
                     ? label(String(value))
                     : String(value)}
             </dd>

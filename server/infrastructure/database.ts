@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { withDeliveryDefaults } from '../../shared/schema';
 import type {
   Entity,
   EntityData,
@@ -19,7 +20,7 @@ export class Repository {
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('busy_timeout = 5000');
     const schemaVersion = this.db.pragma('user_version', { simple: true }) as number;
-    if (schemaVersion > 2) {
+    if (schemaVersion > 3) {
       this.db.close();
       throw new Error('Database schema is newer than this application.');
     }
@@ -47,7 +48,17 @@ export class Repository {
       const columns = this.db.prepare('PRAGMA table_info(account)').all() as { name: string }[];
       if (!columns.some((column) => column.name === 'auth_version'))
         this.db.exec('ALTER TABLE account ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 1');
-      this.db.pragma('user_version = 2');
+      if (schemaVersion < 3) {
+        for (const field of ['developmentStatus', 'githubStatus']) {
+          this.db
+            .prepare(
+              `UPDATE entities SET data=json_set(data, '$.' || ?, 'unknown')
+            WHERE kind IN ('task','issue') AND json_type(data, '$.' || ?) IS NULL`,
+            )
+            .run(field, field);
+        }
+      }
+      this.db.pragma('user_version = 3');
     });
   }
   transaction<T>(work: () => T): T {
@@ -67,7 +78,7 @@ export class Repository {
     if (!row) return undefined;
     return {
       entity: {
-        ...(JSON.parse(row.data) as EntityData),
+        ...withDeliveryDefaults(JSON.parse(row.data) as EntityData),
         id: row.id,
         revision: row.revision,
         createdAt: row.created_at,

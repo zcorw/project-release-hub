@@ -232,3 +232,46 @@ describe('MCP Streamable HTTP boundary', () => {
     expect(repository.list()).toHaveLength(0);
   });
 });
+
+it('MCP exposes and round-trips independent delivery fields on tasks/issues', async () => {
+  const tools = await client.listTools();
+  const schema = JSON.stringify(
+    tools.tools.find((t) => t.name === 'hub_submit_batch')!.inputSchema,
+  );
+  expect(schema).toContain('developmentStatus');
+  expect(schema).toContain('githubStatus');
+  const projectId = randomUUID();
+  const operations = [
+    { action: 'create', id: projectId, entity: { kind: 'project', name: 'Delivery MCP' } },
+    ...(['task', 'issue'] as const).map((kind) => ({
+      action: 'create',
+      entity: {
+        kind,
+        projectId,
+        title: kind,
+        developmentStatus: 'unverified',
+        githubStatus: 'submitted',
+      },
+    })),
+  ];
+  const result = await client.callTool({
+    name: 'hub_submit_batch',
+    arguments: { requestId: randomUUID(), operations },
+  });
+  expect(result.isError).not.toBe(true);
+  const list = await client.callTool({ name: 'hub_list_entities', arguments: { projectId } });
+  expect((list.structuredContent as { entities: unknown[] }).entities).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'task',
+        developmentStatus: 'unverified',
+        githubStatus: 'submitted',
+      }),
+      expect.objectContaining({
+        kind: 'issue',
+        developmentStatus: 'unverified',
+        githubStatus: 'submitted',
+      }),
+    ]),
+  );
+});

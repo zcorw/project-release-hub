@@ -81,3 +81,9 @@ This server does not read repositories or run an AI model. ChatGPT or another au
 ## Verification
 
 tests/mcp.test.ts connects the official SDK client to a real temporary localhost HTTP server and checks tool annotations, direct writes/replay/status, mixed batches, revision/reference failures, duplicate creation review, authentication and isolation from web routes. OAuth integration checks direct writes and all-scope batch authorization; service tests cover persistence rollback, duplicate edits and legacy pending requests. Browser checks cover automatic mutation visibility/history/undo and current consent/account wording.
+
+## Task and issue delivery fields
+
+Every project's tasks and issues expose developmentStatus (unknown, not_developed, unverified, verified) and githubStatus (unknown, not_submitted, submitted). These facts are independent of workflow status. Submitted means the source is pushed to GitHub, not merely committed locally, merged or deployed. Document the commit/PR link and verification scope/results in description. Do not infer verification from CI or done/resolved.
+
+Existing records and omitted API-create values become unknown. Manual new records default to not_developed/not_submitted. Omitted update fields preserve their current values for older clients; send unknown explicitly to clear a claim. Schema v3 fills missing fields in current and recoverably deleted records without changing revisions, timestamps, audit snapshots or stored request fingerprints. Back up before upgrading; older app versions reject v3 databases. Normal revision, atomicity, confirmation and undo rules remain unchanged. Task/issue forms, lists and independent filters expose both fields.
