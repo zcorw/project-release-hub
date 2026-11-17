@@ -15,3 +15,7 @@ The GET-only router returns a deliberately reduced flat entity shape: project na
 Synthetic HTTP integration tests cover grant issuance to read, project isolation, field minimization, no cookie fallback, token hashing, expiry, revocation, password invalidation, resource separation, and method rejection. No device acceptance or live OAuth integration is claimed.
 
 Before mounting: implement owner-facing consent/pairing with CSRF and rate limits, audited issuance/revocation and a bounded expired-grant retention policy; securely deliver the short-lived secret to the exact device; decide explicit renewal/reapproval UX; integrate the device transport; review canonical HTTPS/proxy settings and report compatibility; perform authorized staging and physical-device tests. Push notification transport remains separate. Do not expose `createApprovedGrant` as an unauthenticated issuance API.
+
+## Subsequent isolated pairing increment
+
+`device-pairing-plan.md` describes the opt-in lifecycle router now joining synthetic owner approval to claim, scoped read, renewal and unbinding. It remains unmounted; the browser consent UI, production guard/rate limits, and device credential persistence are still rollout gates. The earlier no-refresh description applies to the foundation alone, not the new opt-in lifecycle.
