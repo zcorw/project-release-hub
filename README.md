@@ -1,5 +1,7 @@
 # Zhixu (知序)
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 **知序** keeps personal projects, feature plans, tasks, versions, and releases in a clear order. The existing project-release-hub folder/package identifiers remain stable for compatibility.
 
 A local-first web workspace for personal software projects, concrete feature plans, tasks, issues, versions, and release tracking.
@@ -7,6 +9,7 @@ A local-first web workspace for personal software projects, concrete feature pla
 ## What works in this version
 
 - Chinese responsive dashboard with per-project feature, task and issue progress and one environment per project.
+- Dedicated project introductions on home-page cards; full descriptions and historical logs remain available in project details.
 - Manual create, edit, and recoverable delete for projects, features, tasks, issues, and releases.
 - Feature acceptance criteria, planned dates, priorities, and target releases; tasks/issues can link to a feature.
 - Single-owner accounts with persistent sessions, password changes, session/grant revocation, and CSRF-protected web writes.
@@ -158,3 +161,7 @@ To reset a forgotten password, stop the server, set HUB_RESET_PASSWORD to the ne
 ## Work-item delivery state
 
 Tasks and issues across all projects have independent development/verification and GitHub submission fields. See [field semantics and upgrade plan](docs/work-item-delivery-fields.md) and [中文说明](docs/work-item-delivery-fields.zh-CN.md). No existing completion status is treated as proof of verification or remote submission. This change does not deploy the application.
+
+## Project introductions
+
+Edit a project's `summary` to set its home-page introduction (up to 500 characters, with surrounding whitespace removed). Cards show only this field, or “暂无项目简介” when empty. Full `description` content, work items, progress and audit history are preserved. Existing projects start without an introduction; no text is guessed or copied from historical logs. Web, API and MCP use the same field. Older clients that omit it preserve an existing value; send an empty string to clear it. See [the introduction plan](docs/project-card-introduction.md) and [中文说明](docs/project-card-introduction.zh-CN.md). This local change does not deploy or backfill production records.

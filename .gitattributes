@@ -1,3 +1,6 @@
+# Keep source formatting stable on Windows and Linux.
+* text=auto eol=lf
+
 # Keep Linux operator scripts executable by Bash after Windows checkouts.
 *.sh text eol=lf
 *.py text eol=lf

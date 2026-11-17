@@ -48,7 +48,7 @@ describe('local administrator initialization', () => {
   it('uses the existing password hash and audit format without changing project records', () => {
     const repository = repo();
     const record = {
-      ...projectSchema.parse({ kind: 'project', name: 'Preserved project' }),
+      ...projectSchema.parse({ kind: 'project', name: 'Preserved project', summary: '' }),
       id: randomUUID(),
       revision: 1,
       createdAt: new Date().toISOString(),

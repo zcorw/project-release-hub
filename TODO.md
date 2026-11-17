@@ -150,3 +150,12 @@ Execute T001 through T007 in order, reviewing one task at a time. T005 and T006 
       Modules: web/project-progress.tsx, overview, tests, and docs/project-card-progress.md.
       Verify: Status/isolation unit tests and browser refresh/narrow-layout regression. See CI for browser execution results.
       Publication: New branch and draft PR authorized; no merge, image publication or deployment.
+
+## Project card introduction
+
+- [x] T019 [P2] Show an explicit project introduction on home-page cards
+      Goal: Separate a concise project summary from full descriptions and historical logs while preserving all progress and history.
+      Modules: shared project contract, application normalization, Web forms/cards, tests and bilingual documentation.
+      Verify: Legacy compatibility/replay, old-client preservation, clearing, validation, audit/undo/rebase, HTTP/MCP and real browser flows; aggregate checks and diff review.
+      Result: npm run check passed (178 unit/integration tests); all 18 Chrome E2E passed; desktop/mobile screenshots and independent diff review passed.
+      Delivery: Main synchronized to 79987b6. After verification, the user authorized source commit/push and a pull request to main; review/merge and deployment remain separate. No image publication or production backfill. See docs/project-card-introduction.md.

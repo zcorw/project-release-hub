@@ -8,6 +8,7 @@ import {
   githubStatuses,
   loginSchema,
   entityLabel,
+  withEntityDefaults,
   type Snapshot,
   type Entity,
   type EntityData,
@@ -562,7 +563,7 @@ function App() {
                   className="search"
                   type="search"
                   aria-label="搜索项目"
-                  placeholder="搜索项目名称或说明…"
+                  placeholder="搜索项目名称、简介或说明…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -576,7 +577,9 @@ function App() {
                 <div className="project-grid">
                   {projects
                     .filter((p) =>
-                      `${p.name} ${p.description}`.toLowerCase().includes(search.toLowerCase()),
+                      `${p.name} ${p.summary ?? ''} ${p.description}`
+                        .toLowerCase()
+                        .includes(search.toLowerCase()),
                     )
                     .map((p) => {
                       const fs = features.filter((f) => f.projectId === p.id);
@@ -598,9 +601,7 @@ function App() {
                           >
                             {p.name}
                           </button>
-                          <p className="project-description">
-                            {p.description || '尚未添加项目说明'}
-                          </p>
+                          <p className="project-description">{p.summary || '暂无项目简介'}</p>
                           <div className="row">
                             <strong className="small">功能进度</strong>
                             <span className="muted small">
@@ -658,7 +659,9 @@ function App() {
               )}
               {projects.length > 0 &&
                 !projects.some((p) =>
-                  `${p.name} ${p.description}`.toLowerCase().includes(search.toLowerCase()),
+                  `${p.name} ${p.summary ?? ''} ${p.description}`
+                    .toLowerCase()
+                    .includes(search.toLowerCase()),
                 ) && (
                   <Empty title="没有匹配的项目">
                     <p>试试其他关键词。</p>
@@ -1144,7 +1147,15 @@ function App() {
                           该记录将被删除。系统会检查引用关系，不会连带删除其他记录。
                         </p>
                       ) : (
-                        <RecordDetails entity={op.entity} entities={entities} />
+                        <RecordDetails
+                          entity={withEntityDefaults(
+                            op.entity,
+                            op.action === 'update' && review.mode === 'batch'
+                              ? existing
+                              : undefined,
+                          )}
+                          entities={entities}
+                        />
                       )}
                     </section>
                   </div>
