@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
+  withDeliveryDefaults,
   batchSchema,
   undoSchema,
   rebaseSchema,
@@ -286,7 +287,7 @@ export class HubService {
       if (operation.action === 'create') {
         if (stored) throw new AppError('ID_EXISTS', '该 ID 已存在，包括历史删除记录', 409);
         const entity: Entity = {
-          ...operation.entity,
+          ...withDeliveryDefaults(operation.entity),
           id,
           revision: 1,
           createdAt: now,
@@ -311,7 +312,7 @@ export class HubService {
           )
             throw new AppError('IMMUTABLE_FIELD', '不能修改记录类型或所属项目');
           const after: Entity = {
-            ...operation.entity,
+            ...withDeliveryDefaults(operation.entity, before),
             id,
             revision: before.revision + 1,
             createdAt: before.createdAt,
@@ -350,7 +351,7 @@ export class HubService {
         before = stored.deleted ? null : stored.entity;
       const after: Entity | null = change.before
         ? {
-            ...entityDataSchema.parse(stripMetadata(change.before)),
+            ...withDeliveryDefaults(entityDataSchema.parse(stripMetadata(change.before))),
             id: change.id,
             revision,
             createdAt: change.before.createdAt,

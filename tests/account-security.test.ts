@@ -56,7 +56,7 @@ describe('persistent single-owner account security', () => {
     const migrated = repo(path);
     expect(migrated.account()).toEqual({ ...hashed, authVersion: 1 });
     expect(verifyPassword(password, migrated.account()!)).toBe(true);
-    expect(migrated.db.pragma('user_version', { simple: true })).toBe(2);
+    expect(migrated.db.pragma('user_version', { simple: true })).toBe(3);
   });
   it('retains authenticated sessions across process/repository restart with stable secret', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'zhixu-session-restart-'));

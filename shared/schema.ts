@@ -4,6 +4,8 @@ export const kinds = ['project', 'feature', 'task', 'issue', 'release'] as const
 export type Kind = (typeof kinds)[number];
 export const priorities = ['P0', 'P1', 'P2', 'P3'] as const;
 export const featureStatuses = ['backlog', 'planned', 'in_progress', 'blocked', 'done'] as const;
+export const developmentStatuses = ['unknown', 'not_developed', 'unverified', 'verified'] as const;
+export const githubStatuses = ['unknown', 'not_submitted', 'submitted'] as const;
 export const taskStatuses = ['todo', 'in_progress', 'blocked', 'done'] as const;
 export const issueStatuses = ['open', 'in_progress', 'resolved', 'closed'] as const;
 export const releaseStatuses = [
@@ -87,6 +89,8 @@ export const taskSchema = z
   .object({
     kind: z.literal('task'),
     ...common,
+    developmentStatus: z.enum(developmentStatuses).optional(),
+    githubStatus: z.enum(githubStatuses).optional(),
     status: z.enum(taskStatuses).default('todo'),
     featureId: optionalId,
     targetReleaseId: optionalId,
@@ -97,6 +101,8 @@ export const issueSchema = z
   .object({
     kind: z.literal('issue'),
     ...common,
+    developmentStatus: z.enum(developmentStatuses).optional(),
+    githubStatus: z.enum(githubStatuses).optional(),
     status: z.enum(issueStatuses).default('open'),
     featureId: optionalId,
     targetReleaseId: optionalId,
@@ -274,5 +280,16 @@ export function entityData(entity: Entity): EntityData {
     updatedAt: _updatedAt,
     ...data
   } = entity;
-  return entityDataSchema.parse(data);
+  return withDeliveryDefaults(entityDataSchema.parse(data));
+}
+
+// Normalize legacy snapshots without changing stored audit/request payloads.
+export function withDeliveryDefaults<T extends EntityData>(data: T, previous?: EntityData): T {
+  if (data.kind !== 'task' && data.kind !== 'issue') return data;
+  const prior = previous?.kind === 'task' || previous?.kind === 'issue' ? previous : undefined;
+  return {
+    ...data,
+    developmentStatus: data.developmentStatus ?? prior?.developmentStatus ?? 'unknown',
+    githubStatus: data.githubStatus ?? prior?.githubStatus ?? 'unknown',
+  };
 }

@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   setupSchema,
+  developmentStatuses,
+  githubStatuses,
   loginSchema,
   entityLabel,
   type Snapshot,
@@ -153,6 +155,8 @@ function Empty({ title, children }: { title: string; children?: React.ReactNode 
   );
 }
 function App() {
+  const [developmentFilter, setDevelopmentFilter] = useState('');
+  const [githubFilter, setGithubFilter] = useState('');
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot>(emptySnapshot);
   const [loading, setLoading] = useState(true);
@@ -212,6 +216,8 @@ function App() {
     void initialize();
   }, []);
   function navigate(next: typeof page) {
+    setDevelopmentFilter('');
+    setGithubFilter('');
     setPage(next);
     setProjectId(null);
     setSearch('');
@@ -327,7 +333,14 @@ function App() {
       />
     );
   const displayed = project
-    ? entities.filter((e) => e.kind === tab && e.projectId === project.id)
+    ? entities.filter(
+        (e) =>
+          e.kind === tab &&
+          e.projectId === project.id &&
+          ((e.kind !== 'task' && e.kind !== 'issue') ||
+            ((!developmentFilter || (e.developmentStatus ?? 'unknown') === developmentFilter) &&
+              (!githubFilter || (e.githubStatus ?? 'unknown') === githubFilter))),
+      )
     : [];
   const actions = project
     ? snapshot.actions.find(
@@ -783,6 +796,38 @@ function App() {
                 <button onClick={() => edit(tab)}>＋ 新建{kindNames[tab]}</button>
               </div>
               <div id="records-content" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+                {(tab === 'task' || tab === 'issue') && (
+                  <div className="delivery-filters">
+                    <label>
+                      开发验证状态筛选{' '}
+                      <select
+                        value={developmentFilter}
+                        onChange={(e) => setDevelopmentFilter(e.target.value)}
+                      >
+                        <option value="">全部</option>
+                        {developmentStatuses.map((v) => (
+                          <option key={v} value={v}>
+                            {label(v)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      GitHub 提交状态筛选{' '}
+                      <select
+                        value={githubFilter}
+                        onChange={(e) => setGithubFilter(e.target.value)}
+                      >
+                        <option value="">全部</option>
+                        {githubStatuses.map((v) => (
+                          <option key={v} value={v}>
+                            {label(v)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
                 {displayed.length === 0 ? (
                   <Empty title={`还没有${kindNames[tab]}`}>
                     <p>
@@ -808,6 +853,18 @@ function App() {
                                 </span>
                               )}
                               <Tag value={e.status} />
+                              {(e.kind === 'task' || e.kind === 'issue') && (
+                                <>
+                                  <span>
+                                    开发验证：
+                                    <Tag value={e.developmentStatus ?? 'unknown'} />
+                                  </span>
+                                  <span>
+                                    GitHub：
+                                    <Tag value={e.githubStatus ?? 'unknown'} />
+                                  </span>
+                                </>
+                              )}
                             </div>
                             <p className="muted record-description">
                               {'description' in e

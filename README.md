@@ -154,3 +154,7 @@ To reset a forgotten password, stop the server, set HUB_RESET_PASSWORD to the ne
 - [GitHub Actions and local container](docs/github-actions.md)
 - [Naming and workflow plan](docs/naming-and-ci-plan.md)
 - [VPS image updates](docs/vps-update.md)
+
+## Work-item delivery state
+
+Tasks and issues across all projects have independent development/verification and GitHub submission fields. See [field semantics and upgrade plan](docs/work-item-delivery-fields.md) and [中文说明](docs/work-item-delivery-fields.zh-CN.md). No existing completion status is treated as proof of verification or remote submission. This change does not deploy the application.
