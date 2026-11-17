@@ -147,3 +147,13 @@ Date: 2026-11-13. The owner's instruction supersedes per-batch MCP human confirm
 - The initial sandboxed targeted HTTP tests hit localhost EACCES; the rerun with local network access passed. Tests used temporary/in-memory databases. Final diff and whitespace review passed.
 
 Existing hub:propose grants now permit direct edits/deletes. Historical pending requests are not automatically applied. Browser/manual proposals and undo still require web confirmation; new duplicate-project creation still keeps a whole batch pending. Clients may independently require tool confirmation. Container smoke and live client connection were not rerun; no commit/push, image publication, deployment or persistent external access was performed.
+
+## Project introduction verification (2026-11-17)
+
+- `npm run check`: passed formatting, strict TypeScript, 178 unit/integration tests across 18 files and production build.
+- `npm run test:e2e`: passed all 18 Chrome scenarios, including three real-backend introduction/card/legacy-proposal flows.
+- Legacy wire payload fingerprints, read compatibility without rewriting history, omitted-update preservation, explicit clearing, validation/atomic failure, audit, undo and reconciliation passed. Real HTTP/MCP round trips preserve Web confirmation rules.
+- Desktop and 390px mobile screenshots were visually reviewed: introductions and empty states display without log content; feature/task/issue progress remains intact.
+- Independent diff review passed after fixing omitted-field proposal previews. Windows CRLF checkout formatting was normalized with repository text attributes; no unrelated semantic changes were introduced.
+- Initial sandboxed browser startup stalled and was stopped. Final checks passed with temporary local process/network access, using isolated databases. Tests did not use production data; no deployment, source commit or push was performed.
+- The connected Zhixu tracking task was updated separately through an applied MCP request. Its status remains in_progress for source delivery and actual acceptance; no project-introduction backfill was performed.

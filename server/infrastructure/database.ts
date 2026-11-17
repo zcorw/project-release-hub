@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { withDeliveryDefaults } from '../../shared/schema';
+import { withEntityDefaults } from '../../shared/schema';
 import type {
   Entity,
   EntityData,
@@ -78,7 +78,7 @@ export class Repository {
     if (!row) return undefined;
     return {
       entity: {
-        ...withDeliveryDefaults(JSON.parse(row.data) as EntityData),
+        ...withEntityDefaults(JSON.parse(row.data) as EntityData),
         id: row.id,
         revision: row.revision,
         createdAt: row.created_at,

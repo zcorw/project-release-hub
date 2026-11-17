@@ -50,6 +50,7 @@ export const projectSchema = z
   .object({
     kind: z.literal('project'),
     name: title,
+    summary: z.string().trim().max(500, '项目简介最多 500 个字符').optional(),
     description,
     repository: z
       .string()
@@ -280,11 +281,15 @@ export function entityData(entity: Entity): EntityData {
     updatedAt: _updatedAt,
     ...data
   } = entity;
-  return withDeliveryDefaults(entityDataSchema.parse(data));
+  return withEntityDefaults(entityDataSchema.parse(data));
 }
 
 // Normalize legacy snapshots without changing stored audit/request payloads.
-export function withDeliveryDefaults<T extends EntityData>(data: T, previous?: EntityData): T {
+export function withEntityDefaults<T extends EntityData>(data: T, previous?: EntityData): T {
+  if (data.kind === 'project') {
+    const prior = previous?.kind === 'project' ? previous : undefined;
+    return { ...data, summary: data.summary ?? prior?.summary ?? '' };
+  }
   if (data.kind !== 'task' && data.kind !== 'issue') return data;
   const prior = previous?.kind === 'task' || previous?.kind === 'issue' ? previous : undefined;
   return {

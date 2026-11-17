@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   entityDataSchema,
-  withDeliveryDefaults,
+  withEntityDefaults,
   entityData,
   entityLabel,
   projectStatuses,
@@ -53,6 +53,7 @@ export const labels: Record<string, string> = {
   name: '项目名称',
   title: '标题',
   description: '说明',
+  summary: '项目简介',
   repository: 'GitHub 仓库',
   status: '状态',
   environmentName: '环境名称',
@@ -227,7 +228,16 @@ export function EntityForm({
     kind === 'project'
       ? [
           { name: 'name', required: true },
-          { name: 'description', type: 'textarea' },
+          {
+            name: 'summary',
+            type: 'textarea',
+            hint: '用于首页项目卡片，最多 500 个字符。简要介绍项目用途和目标。',
+          },
+          {
+            name: 'description',
+            type: 'textarea',
+            hint: '完整说明与进展记录保留在项目详情，不显示在首页卡片。',
+          },
           { name: 'repository', hint: '填写 owner/repo。仅用于手动读取 GitHub Actions。' },
           { name: 'status', options: projectStatuses },
           { name: 'environmentName', required: true },
@@ -387,7 +397,7 @@ export function RecordDetails({
   if (!entity) return <p className="muted">无记录</p>;
   return (
     <dl className="details">
-      {Object.entries(withDeliveryDefaults(entity))
+      {Object.entries(withEntityDefaults(entity))
         .filter(([key]) => !['createdAt', 'updatedAt'].includes(key))
         .map(([key, value]) => (
           <div key={key}>

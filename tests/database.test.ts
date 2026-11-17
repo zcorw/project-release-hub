@@ -19,7 +19,11 @@ describe('SQLite persistence', () => {
     const db = new Repository(filename);
     opened.push(db);
     const record = {
-      ...projectSchema.parse({ kind: 'project', name: 'Example' }),
+      ...projectSchema.parse({
+        kind: 'project',
+        name: 'Example',
+        summary: 'Persisted introduction',
+      }),
       id: randomUUID(),
       revision: 1,
       createdAt: new Date().toISOString(),
