@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import {
   setupSchema,
   developmentStatuses,
@@ -24,6 +25,7 @@ import { RebaseDialog } from './rebase';
 import type { AuthStatus } from './types';
 import { EntityForm, Modal, RecordDetails, Tag, kindNames, label } from './components';
 import { ProjectWorkProgress } from './project-progress';
+import { useWorkspaceNavigation } from './navigation';
 import './styles.css';
 
 const emptySnapshot: Snapshot = { entities: [], requests: [], history: [], actions: [] };
@@ -160,12 +162,18 @@ function App() {
   const [githubFilter, setGithubFilter] = useState('');
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot>(emptySnapshot);
+  const [snapshotLoaded, setSnapshotLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [accountOpen, setAccountOpen] = useState(false);
-  const [page, setPage] = useState<'overview' | 'pending' | 'history'>('overview');
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const {
+    page,
+    projectId,
+    visit,
+    navigate: navigateRoute,
+    isCurrentVisit,
+  } = useWorkspaceNavigation();
   const [tab, setTab] = useState<Exclude<Kind, 'project'>>('feature');
   const [editor, setEditor] = useState<{ kind: Kind; existing?: Entity } | null>(null);
   const [review, setReview] = useState<ChangeRequest | null>(null);
@@ -177,7 +185,9 @@ function App() {
   const prepared = useRef(new Map<string, string>());
   const entities = snapshot.entities;
   const projects = entities.filter((e): e is Project => e.kind === 'project');
-  const project = projects.find((e) => e.id === projectId);
+  const project = snapshotLoaded ? projects.find((e) => e.id === projectId) : undefined;
+  const requestedProject = projectId !== null;
+  const invalidProjectId = requestedProject && !z.uuid().safeParse(projectId).success;
   const pending = snapshot.requests.filter((r) => r.status === 'pending');
   const features = entities.filter((e) => e.kind === 'feature');
   function requestId(key: string) {
@@ -193,6 +203,7 @@ function App() {
     setError('');
     try {
       setSnapshot(await api.snapshot());
+      setSnapshotLoaded(true);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -202,11 +213,15 @@ function App() {
   async function initialize() {
     setError('');
     setLoading(true);
+    setSnapshotLoaded(false);
     try {
       const status = await api.auth();
       setAuth(status);
       if (status.authenticated && resumeOAuth()) return;
-      if (status.authenticated) setSnapshot(await api.snapshot());
+      if (status.authenticated) {
+        setSnapshot(await api.snapshot());
+        setSnapshotLoaded(true);
+      }
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -216,13 +231,18 @@ function App() {
   useEffect(() => {
     void initialize();
   }, []);
-  function navigate(next: typeof page) {
+  useEffect(() => {
+    setTab('feature');
     setDevelopmentFilter('');
     setGithubFilter('');
-    setPage(next);
-    setProjectId(null);
+    setEditor(null);
+    setReview(null);
+    setRebaseOpen(false);
     setSearch('');
     setNotice('');
+  }, [visit]);
+  function navigate(next: typeof page) {
+    navigateRoute(next);
   }
   function edit(kind: Kind, existing?: Entity) {
     setEditor({ kind, existing });
@@ -236,8 +256,10 @@ function App() {
     const key = JSON.stringify(operations);
     const result = await api.change(requestId(key), operations);
     prepared.current.delete(key);
-    if (result.status === 'pending') showReview(result);
-    else setNotice(result.status === 'applied' ? '记录已保存。' : '该请求已拒绝。');
+    if (isCurrentVisit(visit)) {
+      if (result.status === 'pending') showReview(result);
+      else setNotice(result.status === 'applied' ? '记录已保存。' : '该请求已拒绝。');
+    }
     return result;
   }
   async function save(value: EntityData) {
@@ -247,7 +269,7 @@ function App() {
         ? { action: 'update', id: old.id, expectedRevision: old.revision, entity: value }
         : { action: 'create', entity: value },
     ]);
-    setEditor(null);
+    if (isCurrentVisit(visit)) setEditor(null);
     await reload();
   }
   async function remove(entity: Entity) {
@@ -267,8 +289,10 @@ function App() {
     setError('');
     try {
       const result = await api.undo(requestId(`undo:${event.id}`), event.id);
-      if (result.status === 'pending') showReview(result);
-      else setNotice(`撤销请求：${label(result.status)}`);
+      if (isCurrentVisit(visit)) {
+        if (result.status === 'pending') showReview(result);
+        else setNotice(`撤销请求：${label(result.status)}`);
+      }
       await reload();
     } catch (err) {
       setError(errorText(err));
@@ -282,13 +306,16 @@ function App() {
     setReviewError('');
     try {
       const result = await api.review(review.id, action);
-      setNotice(result.status === 'applied' ? '变更已确认并应用。' : '变更已拒绝，数据未修改。');
-      setReview(null);
+      if (isCurrentVisit(visit)) {
+        setNotice(result.status === 'applied' ? '变更已确认并应用。' : '变更已拒绝，数据未修改。');
+        setReview(null);
+      }
       await reload();
     } catch (err) {
-      setReviewError(
-        `${errorText(err)} ${review.mode === 'batch' ? '可点击「基于最新记录重新合并」生成新提案，再核对并确认。' : '请关闭此窗口并刷新，核实最新状态后手动调整。'}`,
-      );
+      if (isCurrentVisit(visit))
+        setReviewError(
+          `${errorText(err)} ${review.mode === 'batch' ? '可点击「基于最新记录重新合并」生成新提案，再核对并确认。' : '请关闭此窗口并刷新，核实最新状态后手动调整。'}`,
+        );
     } finally {
       setBusy(false);
     }
@@ -350,11 +377,15 @@ function App() {
     : undefined;
   const title = project
     ? project.name
-    : page === 'overview'
-      ? '项目总览'
-      : page === 'pending'
-        ? '待确认变更'
-        : '操作历史';
+    : requestedProject
+      ? snapshotLoaded
+        ? '项目不可用'
+        : '项目详情'
+      : page === 'overview'
+        ? '项目总览'
+        : page === 'pending'
+          ? '待确认变更'
+          : '操作历史';
   return (
     <div className="workspace">
       <aside className="sidebar">
@@ -407,8 +438,8 @@ function App() {
                 clearOAuthRequest();
                 setAccountOpen(false);
                 setSnapshot(emptySnapshot);
+                setSnapshotLoaded(false);
                 setAuth(await api.auth());
-                setProjectId(null);
               } catch (err) {
                 setError(errorText(err));
               } finally {
@@ -429,7 +460,7 @@ function App() {
             if (!status.authenticated) {
               setAccountOpen(false);
               setSnapshot(emptySnapshot);
-              setProjectId(null);
+              setSnapshotLoaded(false);
               setEditor(null);
               setReview(null);
               setNotice('');
@@ -456,10 +487,10 @@ function App() {
             </button>
           </div>
         </div>
-        <header className="page-header">
+        <header className={`page-header${requestedProject ? ' project-detail-header' : ''}`}>
           <div>
-            {project ? (
-              <button className="back-link" onClick={() => setProjectId(null)}>
+            {requestedProject ? (
+              <button className="back-link" onClick={() => navigate('overview')}>
                 ← 返回项目总览
               </button>
             ) : (
@@ -472,15 +503,27 @@ function App() {
               </span>
             )}
             <h1>{title}</h1>
-            <p className="muted">
-              {project
-                ? project.description || '在这里管理功能、任务、问题与版本。'
-                : page === 'overview'
-                  ? '从具体功能到版本发布，让每一步进展清晰可见。'
-                  : page === 'pending'
-                    ? '这里保留网页提案、疑似重复的新项目和历史待确认请求。MCP 修改、删除可在授权范围内直接生效。'
-                    : '查看每一次数据变更，以及应用前后的完整记录。'}
-            </p>
+            {project ? (
+              <>
+                <p className="muted project-summary">{project.summary || '暂无项目简介'}</p>
+                <details className="project-description-disclosure" key={`${project.id}:${visit}`}>
+                  <summary>项目说明</summary>
+                  <p className="muted">{project.description || '暂无项目说明'}</p>
+                </details>
+              </>
+            ) : (
+              <p className="muted">
+                {requestedProject
+                  ? snapshotLoaded
+                    ? '请检查项目链接，或返回项目总览选择其他项目。'
+                    : '正在读取项目数据。'
+                  : page === 'overview'
+                    ? '从具体功能到版本发布，让每一步进展清晰可见。'
+                    : page === 'pending'
+                      ? '这里保留网页提案、疑似重复的新项目和历史待确认请求。MCP 修改、删除可在授权范围内直接生效。'
+                      : '查看每一次数据变更，以及应用前后的完整记录。'}
+              </p>
+            )}
           </div>
           <div className="header-actions">
             {project ? (
@@ -496,7 +539,7 @@ function App() {
                   删除
                 </button>
               </>
-            ) : page === 'overview' ? (
+            ) : !requestedProject && page === 'overview' ? (
               <button onClick={() => edit('project')}>＋ 新建项目</button>
             ) : null}
           </div>
@@ -522,7 +565,15 @@ function App() {
             正在同步最新数据…
           </p>
         )}
-        {!project && page === 'overview' && (
+        {requestedProject && snapshotLoaded && !project && (
+          <div className="alert" role="alert">
+            {invalidProjectId ? '项目 ID 无效。' : '项目不存在或已被删除。'}
+            <button className="text-button" onClick={() => navigate('overview')}>
+              返回项目总览
+            </button>
+          </div>
+        )}
+        {!requestedProject && page === 'overview' && (
           <>
             <section className="metrics" aria-label="项目指标">
               <Metric
@@ -594,10 +645,7 @@ function App() {
                           </div>
                           <button
                             className="project-title"
-                            onClick={() => {
-                              setProjectId(p.id);
-                              setTab('feature');
-                            }}
+                            onClick={() => navigateRoute('overview', p.id)}
                           >
                             {p.name}
                           </button>
@@ -644,10 +692,7 @@ function App() {
                             </span>
                             <button
                               className="text-button"
-                              onClick={() => {
-                                setProjectId(p.id);
-                                setTab('feature');
-                              }}
+                              onClick={() => navigateRoute('overview', p.id)}
                             >
                               查看项目 →
                             </button>
@@ -1054,6 +1099,10 @@ function App() {
           requestId={requestId}
           onBack={() => setRebaseOpen(false)}
           onGenerated={async (result) => {
+            if (!isCurrentVisit(visit)) {
+              await reload();
+              return;
+            }
             setRebaseOpen(false);
             if (result.status === 'pending') {
               showReview(result);

@@ -5,7 +5,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { Repository } from '../../server/infrastructure/database';
 import { HubService } from '../../server/application/hub';
 import { createApp } from '../../server/http/app';
-import { entityDataSchema } from '../../shared/schema';
+import { entityData, entityDataSchema } from '../../shared/schema';
 
 let repository: Repository, hub: HubService, server: Server, url: string;
 const history = '任务日志：commit abc123 已通过测试，待部署。\n历史说明不得删除。';
@@ -84,7 +84,13 @@ test('cards separate introductions from legacy logs and preserve progress throug
   );
   await page.screenshot({ path: testInfo.outputPath('summary-overview.png'), fullPage: true });
   await card.getByRole('button', { name: '简介项目', exact: true }).click();
-  await expect(page.locator('.page-header')).toContainText(history.split('\n')[0]);
+  await expect(page.locator('.page-header .project-summary')).toHaveText('管理个人软件项目。');
+  const disclosure = page.locator('details.project-description-disclosure');
+  await expect(disclosure).toHaveJSProperty('open', false);
+  await expect(disclosure.locator('p')).toBeHidden();
+  await disclosure.locator('summary').click();
+  await expect(disclosure.locator('p')).toBeVisible();
+  expect(await disclosure.locator('p').textContent()).toBe(history);
   await page.getByRole('button', { name: '编辑项目', exact: true }).click();
   let dialog = page.getByRole('dialog');
   await expect(dialog.getByLabel('说明', { exact: true })).toHaveValue(history);
@@ -168,7 +174,13 @@ test('new projects support summary search and explicitly clearing the summary wi
   await dialog.getByRole('button', { name: '生成变更提案', exact: true }).click();
   await page.getByRole('button', { name: '确认并应用', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.locator('.page-header')).toContainText(history.split('\n')[0]);
+  await expect(page.locator('.page-header .project-summary')).toHaveText('暂无项目简介');
+  const disclosure = page.locator('details.project-description-disclosure');
+  await expect(disclosure).toHaveJSProperty('open', false);
+  await expect(disclosure.locator('p')).toBeHidden();
+  await disclosure.locator('summary').click();
+  await expect(disclosure.locator('p')).toBeVisible();
+  expect(await disclosure.locator('p').textContent()).toBe(history);
   await overview(page);
   await expect(card.locator('.project-description')).toHaveText('暂无项目简介');
   await expect(card).not.toContainText('任务日志');
@@ -223,4 +235,168 @@ test('legacy proposals preview and preserve an omitted introduction when confirm
   });
   await overview(page);
   await expect(page.locator('.project-description')).toHaveText('应保留的简介');
+});
+
+test('project descriptions support keyboard disclosure and start closed on every navigation visit', async ({
+  page,
+}) => {
+  const original = '项目 A 的完整说明。\n\n  保留原有缩进。\n最后一行。';
+  const projectA = create({
+    kind: 'project',
+    name: '说明项目 A',
+    summary: '项目 A 的独立简介。',
+    description: original,
+  });
+  const projectB = create({
+    kind: 'project',
+    name: '说明项目 B',
+    summary: '项目 B 的独立简介。',
+    description: '只属于项目 B 的完整说明。',
+  });
+  await signIn(page);
+
+  const disclosure = page.locator('details.project-description-disclosure');
+  const toggle = disclosure.locator('summary');
+  const description = disclosure.locator('p');
+  const introduction = page.locator('.page-header .project-summary');
+  async function expectClosed(name: string, summary: string) {
+    await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+    await expect(introduction).toHaveText(summary);
+    await expect(toggle).toHaveText('项目说明');
+    await expect(disclosure).toHaveJSProperty('open', false);
+    await expect(description).toBeHidden();
+  }
+
+  await page.getByRole('button', { name: '说明项目 A', exact: true }).click();
+  await expectClosed('说明项目 A', '项目 A 的独立简介。');
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(disclosure).toHaveJSProperty('open', true);
+  await expect(description).toBeVisible();
+  expect(await description.textContent()).toBe(original);
+  await expect(description).toHaveCSS('white-space', 'pre-wrap');
+  await page.keyboard.press('Enter');
+  await expect(disclosure).toHaveJSProperty('open', false);
+  await expect(description).toBeHidden();
+  await page.keyboard.press('Enter');
+  await expect(description).toBeVisible();
+
+  const refreshedDescription = original + '\n后台刷新补充的说明。';
+  const current = repository.get(projectA.id)!.entity;
+  const refreshed = hub.submit(
+    {
+      requestId: randomUUID(),
+      operations: [
+        {
+          action: 'update',
+          id: current.id,
+          expectedRevision: current.revision,
+          entity: entityDataSchema.parse({
+            ...entityData(current),
+            summary: '项目 A 更新后的独立简介。',
+            description: refreshedDescription,
+          }),
+        },
+      ],
+    },
+    'mcp',
+  );
+  expect(refreshed.status).toBe('applied');
+  await page.getByRole('button', { name: '刷新数据', exact: true }).click();
+  await expect(introduction).toHaveText('项目 A 更新后的独立简介。');
+  await expect(disclosure).toHaveJSProperty('open', true);
+  await expect(description).toBeVisible();
+  expect(await description.textContent()).toBe(refreshedDescription);
+
+  await page.getByRole('button', { name: '← 返回项目总览', exact: true }).click();
+  await page.getByRole('button', { name: '说明项目 A', exact: true }).click();
+  await expectClosed('说明项目 A', '项目 A 更新后的独立简介。');
+  await toggle.click();
+  await expect(description).toBeVisible();
+  await overview(page);
+  await page.getByRole('button', { name: '说明项目 B', exact: true }).click();
+  await expectClosed('说明项目 B', '项目 B 的独立简介。');
+  await toggle.click();
+  await expect(description).toBeVisible();
+  expect(await description.textContent()).toBe('只属于项目 B 的完整说明。');
+  expect(new URL(page.url()).searchParams.get('project')).toBe(projectB.id);
+
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: '项目总览', exact: true })).toBeVisible();
+  await page.goBack();
+  await expectClosed('说明项目 A', '项目 A 更新后的独立简介。');
+  await toggle.click();
+  await expect(description).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole('heading', { name: '项目总览', exact: true })).toBeVisible();
+  await page.goForward();
+  await expectClosed('说明项目 B', '项目 B 的独立简介。');
+  await toggle.click();
+  await expect(description).toBeVisible();
+  await page.reload();
+  await expectClosed('说明项目 B', '项目 B 的独立简介。');
+});
+
+test('empty introductions and descriptions have separate detail placeholders', async ({ page }) => {
+  create({ kind: 'project', name: '空白说明项目', summary: '', description: '' });
+  await signIn(page);
+  await page.getByRole('button', { name: '空白说明项目', exact: true }).click();
+  await expect(page.locator('.page-header .project-summary')).toHaveText('暂无项目简介');
+  const disclosure = page.locator('details.project-description-disclosure');
+  await expect(disclosure).toHaveJSProperty('open', false);
+  await expect(disclosure.locator('p')).toBeHidden();
+  await disclosure.locator('summary').click();
+  await expect(disclosure.locator('p')).toBeVisible();
+  await expect(disclosure.locator('p')).toHaveText('暂无项目说明');
+  await disclosure.locator('summary').click();
+  await expect(disclosure.locator('p')).toBeHidden();
+  const snapshot = await (await page.request.get(url + '/api/snapshot')).json();
+  expect(snapshot.entities[0]).toMatchObject({ summary: '', description: '' });
+});
+
+test('long introductions and expanded original descriptions fit desktop and narrow screens', async ({
+  page,
+}, testInfo) => {
+  const longSummary = '长简介：' + 's'.repeat(480);
+  const original =
+    '原文首行，保留空格和换行。\n  原始缩进内容。\nhttps://example.test/' +
+    'description'.repeat(70) +
+    '\n原文最后一行。';
+  create({ kind: 'project', name: '长说明阅读项目', summary: longSummary, description: original });
+  await signIn(page);
+  await page.getByRole('button', { name: '长说明阅读项目', exact: true }).click();
+  const introduction = page.locator('.page-header .project-summary');
+  const disclosure = page.locator('details.project-description-disclosure');
+  const description = disclosure.locator('p');
+  await expect(introduction).toBeVisible();
+  expect(await introduction.textContent()).toBe(longSummary);
+  await expect(disclosure).toHaveJSProperty('open', false);
+  await disclosure.locator('summary').click();
+  await expect(description).toBeVisible();
+  expect(await description.textContent()).toBe(original);
+  await expect(description).toHaveCSS('white-space', 'pre-wrap');
+  expect(
+    await page.evaluate(
+      () => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: testInfo.outputPath('project-description-desktop.png'),
+    fullPage: true,
+  });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(introduction).toBeVisible();
+  await expect(description).toBeVisible();
+  expect(await introduction.textContent()).toBe(longSummary);
+  expect(await description.textContent()).toBe(original);
+  expect(
+    await page.evaluate(
+      () => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: testInfo.outputPath('project-description-mobile.png'),
+    fullPage: true,
+  });
 });

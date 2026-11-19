@@ -159,3 +159,20 @@ Execute T001 through T007 in order, reviewing one task at a time. T005 and T006 
       Verify: Legacy compatibility/replay, old-client preservation, clearing, validation, audit/undo/rebase, HTTP/MCP and real browser flows; aggregate checks and diff review.
       Result: npm run check passed (178 unit/integration tests); all 18 Chrome E2E passed; desktop/mobile screenshots and independent diff review passed.
       Delivery: Main synchronized to 79987b6. After verification, the user authorized source commit/push and a pull request to main; review/merge and deployment remain separate. No image publication or production backfill. See docs/project-card-introduction.md.
+
+## Project detail navigation and reading
+
+- [x] T020 [P1] Restore project details from the browser URL
+      Goal: Record the selected project in the URL, restore direct links and refreshes, support history navigation, and explain unavailable projects after authenticated loading.
+      Modules: web navigation, application shell, browser tests, and bilingual documentation.
+      Verify: Real isolated browser checks for A/B navigation, reload/direct links, Back/Forward, authentication, invalid/deleted projects, and loading/error retry; repository checks and diff review.
+      Source: Zhixu feature a7fb529a-683d-444a-9b65-6d176437ddbb. See docs/project-detail-navigation.md.
+      Result: TypeScript/production build and all seven isolated real-backend navigation browser checks passed; independent source review passed.
+      Delivery: After verification, the user authorized source commit and normal push on the existing working branch. No deployment requested.
+- [x] T021 [P1] Show introductions and collapse full project descriptions
+      Goal: Show the independent summary immediately and reveal complete descriptions only after explicit expansion, resetting disclosure on each project visit.
+      Modules: project detail header, styles, existing summary browser tests, and bilingual documentation.
+      Verify: Default disclosure, keyboard expansion/collapse, repeat visits/A-B switching, original content/edit preservation, empty values and narrow layout; repository checks and diff review.
+      Source: Zhixu task 6e5958b6-312a-48d3-95d6-454916492f77. See docs/project-detail-navigation.md.
+      Result: Aggregate checks passed (178 unit/integration tests and production build); all 28 Chrome scenarios passed, including keyboard/visit/refresh/original-content checks. Desktop/mobile screenshots and independent source review passed.
+      Delivery: After verification, the user authorized source commit and normal push on the existing working branch. No deployment requested.

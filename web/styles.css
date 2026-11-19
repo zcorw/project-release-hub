@@ -287,6 +287,31 @@ small,
   max-width: 800px;
   white-space: pre-wrap;
 }
+.project-detail-header {
+  align-items: flex-start;
+}
+.project-detail-header > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.project-summary,
+.project-description-disclosure p {
+  overflow-wrap: anywhere;
+}
+.project-description-disclosure {
+  max-width: 800px;
+  margin-top: 12px;
+  font-size: 12px;
+}
+.project-description-disclosure summary {
+  width: fit-content;
+  color: var(--purple);
+  font-weight: 600;
+  cursor: pointer;
+}
+.project-description-disclosure p {
+  margin-top: 10px;
+}
 .header-actions {
   display: flex;
   gap: 10px;

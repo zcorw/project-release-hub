@@ -164,4 +164,8 @@ npm run backup -- .\backups\hub-2026-11-10.db
 
 ## 项目简介
 
-编辑项目的 `summary` 设置首页简介，最多 500 个字符，自动去除首尾空白。卡片只显示此字段；为空时显示“暂无项目简介”。完整 `description`、任务、问题、进度和审计历史均保留。已有项目初始没有简介，不从历史日志猜测或复制文本。Web、API 和 MCP 使用同一字段。旧客户端更新时省略该字段会保留已有值；发送空字符串可清空。见[简介方案](docs/project-card-introduction.md)和[中文说明](docs/project-card-introduction.zh-CN.md)。本次本地变更不部署，也不回填生产记录。
+编辑项目的 `summary` 设置项目简介，最多 500 个字符，自动去除首尾空白。首页卡片和项目详情标题下均显示此字段；为空时显示“暂无项目简介”。在详情页展开“项目说明”可阅读完整说明，也可再次收起；每次重新进入详情时默认收起。说明为空时，展开后显示“暂无项目说明”。完整 `description`、任务、问题、进度和审计历史均保留。已有项目初始没有简介，不从历史日志猜测或复制文本。Web、API 和 MCP 使用同一字段。旧客户端更新时省略该字段会保留已有值；发送空字符串可清空。见[简介方案](docs/project-card-introduction.md)、[详情阅读决策](docs/project-detail-navigation.md)和[中文说明](docs/project-detail-navigation.zh-CN.md)。本次本地变更不部署，也不回填生产记录。
+
+## 项目详情链接
+
+打开项目时，URL 会记录 `?project=<id>`；刷新或直接打开该链接，在登录后恢复对应项目。浏览器前进、后退恢复项目选择及已有待确认、历史视图（`?view=pending`、`?view=history`）。无效或已删除的项目在数据加载后显示说明和返回总览入口；连接失败会保留链接以便重试。见[导航决策](docs/project-detail-navigation.md)和[中文说明](docs/project-detail-navigation.zh-CN.md)。本次本地实现不部署应用。
